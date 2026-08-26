@@ -125,7 +125,13 @@ const PARQUE_COLOR = {
 };
 
 // ─── Mapa Leaflet ──────────────────────────────────────────────
-const map = L.map('map',{zoomControl:true,attributionControl:false}).setView([41.7,-1.1],9);
+const map = L.map('map',{
+  zoomControl:true,
+  attributionControl:false,
+  zoomSnap:0.25,           // permite zooms fraccionarios (0.25, 0.5, 0.75…)
+  zoomDelta:0.25,          // cada +/- del control suma/resta 0.25
+  wheelPxPerZoomLevel:120  // rueda de ratón también más suave
+}).setView([41.7,-1.1],9);
 // Sin capa base — sólo se ven los polígonos de los muns sobre fondo neutro.
 const capaMuns = L.layerGroup().addTo(map);
 const capaParques = L.layerGroup().addTo(map);
