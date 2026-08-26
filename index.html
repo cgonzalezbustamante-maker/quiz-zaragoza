@@ -274,8 +274,10 @@ function renderParques(){
     // - La Almunia: esquina inf-izquierda coincide con el círculo (etiqueta
     //   queda arriba-derecha).
     const ANCHORS = {
-      'Calatayud':                    [110, 78],
-      'La Almunia de Doña Godina':    [0, 78],
+      'Calatayud':                    [110, 78],  // inf-dcha coincide → etiq arriba-izq
+      'La Almunia de Doña Godina':    [0, 78],    // inf-izq coincide → etiq arriba-dcha
+      'Ejea de los Caballeros':       [0, 78],    // inf-izq coincide → etiq arriba-dcha
+      'Tarazona':                     [110, 0],   // sup-dcha coincide → etiq abajo-izq
     };
     const anchor = ANCHORS[p] || [0, -14];
     L.marker([pv.lat, pv.lon],{icon:L.divIcon({className:'',
