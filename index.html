@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOSDPZ · Cobertura Operativa Provincia de Zaragoza</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  :root{
+    --bg:#f4f1ea; --pane:#ffffff; --tinta:#1a1a1a; --oro:#c9a24b; --rojo:#b31f26;
+    --v:#2ecc71; --a:#f1c40f; --n:#e67e22; --r:#c0392b; --k:#5a0810; --g:#95a5a6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;font-family:'Segoe UI',Arial,sans-serif;color:var(--tinta);background:var(--bg)}
+  #app{display:flex;height:100vh;overflow:hidden}
+  aside{width:340px;background:var(--pane);border-right:2px solid var(--tinta);padding:14px 12px;overflow-y:auto;flex-shrink:0}
+  aside h1{font-size:18px;margin:0 0 4px;color:var(--rojo);letter-spacing:.02em}
+  aside .sub{font-size:11px;color:#666;margin-bottom:14px}
+  .leyenda{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding:8px;background:#f9f5ea;border-radius:6px;border:1px solid #d7cba5}
+  .leyenda span{font-size:10px;padding:2px 6px;border-radius:3px;color:#111;font-weight:700}
+  .parque{background:var(--pane);border:1.5px solid #ddd;border-radius:8px;padding:10px 11px;margin-bottom:9px;box-shadow:0 1px 3px #0001}
+  .parque.cerrado{opacity:.55;border-style:dashed}
+  .parque-cab{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .parque-cab .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+  .parque-nom{font-weight:800;font-size:14px;flex:1}
+  .bom-ctrl{display:flex;align-items:center;gap:4px}
+  .bom-ctrl button{width:24px;height:24px;border-radius:4px;border:1px solid #999;background:#fff;font-weight:800;cursor:pointer;font-size:14px;padding:0}
+  .bom-ctrl button:hover{background:#f0e5cc}
+  .bom-ctrl input{width:38px;text-align:center;padding:3px 2px;border:1px solid #999;border-radius:4px;font-weight:800;font-size:14px}
+  .bom-ico{font-size:16px;margin-right:2px}
+  .stats{font-size:11px;color:#444;line-height:1.5}
+  .stats b{color:var(--tinta)}
+  #map-wrap{flex:1;height:100%;position:relative}
+  #map{width:100%;height:100%;background:#faf3e0}
+  .leaflet-container{background:#faf3e0}
+  #legend-map{position:absolute;top:4px;right:4px;background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:8px 10px;box-shadow:0 3px 8px #0005;z-index:1000;font-size:12px;font-weight:700;pointer-events:none}
+  #legend-map .titulo{font-size:12px;font-weight:900;color:var(--rojo);margin-bottom:8px;text-align:center;letter-spacing:.03em}
+  #legend-map .fila{display:flex;align-items:center;gap:7px;margin:4px 0}
+  #legend-map .caja{width:22px;height:16px;border:1.5px solid #333;border-radius:3px;flex-shrink:0}
+  .totales{margin-top:14px;padding:10px;background:#fff5e0;border:1.5px solid var(--oro);border-radius:6px;font-size:12px}
+  .totales b{color:var(--rojo)}
+  .btn-reset{margin-top:10px;width:100%;padding:8px;background:var(--tinta);color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
+  .btn-reset:hover{background:var(--rojo)}
+  /* Etiquetas de parque en mapa */
+  .lbl-parque{background:rgba(255,255,255,.72);backdrop-filter:blur(2px);border:2px solid rgba(26,26,26,.9);border-radius:6px;padding:4px 7px;font-size:11px;font-weight:700;box-shadow:0 2px 5px #0004;text-align:center;line-height:1.25;white-space:nowrap;pointer-events:none}
+  .lbl-parque .p-nom{font-size:13px;color:var(--rojo);text-shadow:0 0 3px #fff;font-weight:900}
+  .lbl-parque .p-boms{font-size:16px;letter-spacing:1px;margin:1px 0}
+  .lbl-parque .p-stat{font-size:11px;color:#111;text-shadow:0 0 3px #fff;font-weight:700}
+  .lbl-parque .p-stat b{color:var(--tinta);font-weight:900}
+  .lbl-parque.cerrado{background:rgba(255,220,220,.72);border-color:rgba(178,31,38,.9)}
+  .lbl-mun-name{background:transparent;border:none;color:#333;font-size:9px;font-weight:600;text-shadow:1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>🚒 SOSDPZ · Cobertura</h1>
+    <div class="sub">Cierra o abre parques ajustando bomberos. Los muns se reasignan al siguiente parque disponible.</div>
+    <div class="leyenda">
+      <span style="background:var(--v)">0–15 min</span>
+      <span style="background:var(--a)">15–35 min</span>
+      <span style="background:var(--n);color:#fff">35–45 min</span>
+      <span style="background:var(--r);color:#fff">45–55 min</span>
+      <span style="background:var(--k);color:#fff">&gt;55 min</span>
+      <span style="background:var(--g);color:#fff">Sin cobertura</span>
+    </div>
+    <div id="parques-lista"></div>
+    <div class="totales" id="totales"></div>
+    <button class="btn-reset" onclick="resetear()">Restablecer valores por defecto</button>
+  </aside>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="legend-map">
+      <div class="titulo">TIEMPO DE INTERVENCIÓN</div>
+      <div class="fila"><span class="caja" style="background:var(--v)"></span>0 – 15 min</div>
+      <div class="fila"><span class="caja" style="background:var(--a)"></span>15 – 35 min</div>
+      <div class="fila"><span class="caja" style="background:var(--n)"></span>35 – 45 min</div>
+      <div class="fila"><span class="caja" style="background:var(--r)"></span>45 – 55 min</div>
+      <div class="fila"><span class="caja" style="background:var(--k)"></span>&gt; 55 min</div>
+    </div>
+  </div>
+</div>
+<script>
+// ─── Datos y estado ────────────────────────────────────────────
+let DATOS = null;
+const BOMBEROS_DEFAULT = {
+  'Tarazona':4, 'Calatayud':4, 'Ejea de los Caballeros':4, 'Caspe':4, 'La Almunia de Doña Godina':4,
+  'Tauste':2, 'Daroca':2, 'Cariñena':2, 'El Burgo de Ebro':2
+};
+let bomberos = {...BOMBEROS_DEFAULT};
+const PARQUE_COLOR = {
+  'Zaragoza':'#b31f26',
+  'Tarazona':'#8e44ad','Calatayud':'#2980b9','Ejea de los Caballeros':'#16a085',
+  'Caspe':'#d35400','La Almunia de Doña Godina':'#c0392b','Tauste':'#27ae60',
+  'Daroca':'#f39c12','Cariñena':'#7f8c8d','El Burgo de Ebro':'#e67e22'
+};
+
+// ─── Mapa Leaflet ──────────────────────────────────────────────
+const map = L.map('map',{zoomControl:true,attributionControl:false}).setView([41.7,-1.1],9);
+// Sin capa base — sólo se ven los polígonos de los muns sobre fondo neutro.
+const capaMuns = L.layerGroup().addTo(map);
+const capaParques = L.layerGroup().addTo(map);
+const capaLbls = L.layerGroup().addTo(map);
+
+// ─── Utilidades ────────────────────────────────────────────────
+function colorTiempo(min){
+  const g = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  if(min<=15) return g('--v');
+  if(min<=35) return g('--a');
+  if(min<=45) return g('--n');
+  if(min<=55) return g('--r');
+  return g('--k');
+}
+const COL_GRIS = '#95a5a6';
+
+// Devuelve el primer parque de la lista ordenada por tiempo que tenga bomberos>0
+function parqueAsignado(mun){
+  const m = DATOS.muns[mun];
+  if(!m || !m.parques || !m.parques.length) return null;
+  for(const [p,t] of m.parques){
+    if((bomberos[p]||0) > 0) return {parque:p, min:t};
+  }
+  return null;
+}
+
+// ─── Panel lateral ─────────────────────────────────────────────
+function renderPanel(){
+  const cont = document.getElementById('parques-lista');
+  cont.innerHTML = '';
+  const orden = Object.keys(BOMBEROS_DEFAULT); // orden fijo del listado
+  orden.forEach(p=>{
+    const n = bomberos[p]||0;
+    const cerrado = n<=0;
+    const col = PARQUE_COLOR[p] || '#666';
+    // Contadores para este parque
+    let numMuns=0, sup=0, pob=0;
+    Object.entries(DATOS.muns).forEach(([mun,mv])=>{
+      const asig = parqueAsignado(mun);
+      if(asig && asig.parque===p){ numMuns++; sup+=mv.sup_km2; pob+=mv.pob; }
+    });
+    const div = document.createElement('div');
+    div.className = 'parque' + (cerrado?' cerrado':'');
+    div.innerHTML =
+      '<div class="parque-cab">'+
+        '<span class="dot" style="background:'+col+'"></span>'+
+        '<span class="parque-nom">'+p+'</span>'+
+        '<div class="bom-ctrl">'+
+          '<button onclick="ajustar(\''+p.replace(/\'/g,"\\'")+'\', -1)">−</button>'+
+          '<input type="number" min="0" value="'+n+'" onchange="setBom(\''+p.replace(/\'/g,"\\'")+'\', this.value)">'+
+          '<button onclick="ajustar(\''+p.replace(/\'/g,"\\'")+'\', +1)">+</button>'+
+        '</div>'+
+      '</div>'+
+      (cerrado
+        ? '<div class="stats" style="color:#c0392b;font-weight:800">⚠ Parque cerrado — sin cobertura asignada</div>'
+        : '<div class="stats">'+
+            '<span class="bom-ico">🧑‍🚒</span><b>'+numMuns+'</b> muns · <b>'+sup.toFixed(0)+'</b> km² · <b>'+pob.toLocaleString('es-ES')+'</b> hab'+
+          '</div>');
+    cont.appendChild(div);
+  });
+  actualizarTotales();
+}
+
+function actualizarTotales(){
+  const t = document.getElementById('totales');
+  let cub=0, ncub=0, pobCub=0, pobNo=0, supCub=0, supNo=0;
+  Object.entries(DATOS.muns).forEach(([mun,mv])=>{
+    if(parqueAsignado(mun)){ cub++; pobCub+=mv.pob; supCub+=mv.sup_km2; }
+    else { ncub++; pobNo+=mv.pob; supNo+=mv.sup_km2; }
+  });
+  t.innerHTML = 'Cobertura: <b>'+cub+'</b> muns / '+(cub+ncub)+' — <b>'+pobCub.toLocaleString('es-ES')+'</b> hab cubiertos'+
+    (ncub>0 ? '<br>⚠ <b>'+ncub+'</b> muns sin cobertura ('+pobNo.toLocaleString('es-ES')+' hab)' : '');
+}
+
+function ajustar(p, d){ setBom(p, (bomberos[p]||0) + d); }
+function setBom(p, v){
+  v = Math.max(0, parseInt(v)||0);
+  bomberos[p] = v;
+  refrescar();
+}
+function resetear(){ bomberos = {...BOMBEROS_DEFAULT}; refrescar(); }
+
+// ─── Render mapa ───────────────────────────────────────────────
+function renderMuns(){
+  capaMuns.clearLayers();
+  Object.entries(DATOS.muns).forEach(([mun, mv])=>{
+    if(!mv.poligonos || !mv.poligonos.length) return;
+    const asig = parqueAsignado(mun);
+    const col = asig ? colorTiempo(asig.min) : COL_GRIS;
+    mv.poligonos.forEach(poly=>{
+      if(!poly || poly.length<3) return;
+      L.polygon(poly,{
+        color:'#1a1a1a', weight:0.8, opacity:0.9,
+        fillColor:col, fillOpacity:1, interactive:true
+      }).bindTooltip(
+        '<b>'+mun+'</b><br>'+
+        (asig ? asig.parque+' · '+asig.min.toFixed(1)+' min' : '<span style="color:#c0392b">SIN COBERTURA</span>')+
+        '<br>Pob: '+mv.pob.toLocaleString('es-ES')+' hab · '+mv.sup_km2.toFixed(1)+' km²',
+        {sticky:true}
+      ).addTo(capaMuns);
+    });
+  });
+}
+
+function renderParques(){
+  capaParques.clearLayers();
+  capaLbls.clearLayers();
+  Object.entries(DATOS.parques).forEach(([p, pv])=>{
+    const n = bomberos[p]||0;
+    const col = PARQUE_COLOR[p] || '#666';
+    const cerrado = n<=0;
+    // Contadores actuales
+    let numMuns=0, sup=0, pob=0;
+    Object.entries(DATOS.muns).forEach(([mun,mv])=>{
+      const asig = parqueAsignado(mun);
+      if(asig && asig.parque===p){ numMuns++; sup+=mv.sup_km2; pob+=mv.pob; }
+    });
+    // Icono círculo del parque
+    L.circleMarker([pv.lat, pv.lon],{
+      radius:cerrado?7:10, color:'#1a1a1a', fillColor:cerrado?'#888':col, fillOpacity:1, weight:2.5
+    }).addTo(capaParques);
+    // Etiqueta flotante semitransparente: si cerrado, sólo nombre + sello CERRADO
+    // (no se muestran muns/km²/hab porque no atiende cobertura).
+    let cuerpo;
+    if(cerrado){
+      cuerpo = '<div class="p-nom">'+p+'</div>'+
+               '<div class="p-boms" style="color:#c0392b;font-weight:900">CERRADO</div>';
+    } else {
+      cuerpo = '<div class="p-nom">'+p+'</div>'+
+               '<div class="p-boms">'+'🧑‍🚒'.repeat(Math.min(n,10))+'</div>'+
+               '<div class="p-stat"><b>'+numMuns+'</b> muns · <b>'+sup.toFixed(0)+'</b> km²</div>'+
+               '<div class="p-stat"><b>'+pob.toLocaleString('es-ES')+'</b> hab</div>';
+    }
+    L.marker([pv.lat, pv.lon],{icon:L.divIcon({className:'',
+      html:'<div class="lbl-parque'+(cerrado?' cerrado':'')+'">'+cuerpo+'</div>',
+      iconSize:null, iconAnchor:[0,-14]}), interactive:false, zIndexOffset:1000
+    }).addTo(capaLbls);
+  });
+}
+
+function refrescar(){ renderMuns(); renderParques(); renderPanel(); }
+
+// ─── Exportar POSTER (deshabilitado) ──────────────────────────
+async function _generarPoster_deshabilitado_(){
+  const btn = event.target;
+  const txt = btn.textContent;
+  btn.textContent = '⏳ Generando…';
+  btn.disabled = true;
+  try{
+    const W = 1080, H = 1920;
+    // Colores según tiempo (usados también en la leyenda)
+    const COL = {v:'#2ecc71', a:'#f1c40f', n:'#e67e22', r:'#c0392b'};
+
+    // Contadores por parque (bomberos, muns, sup, pob)
+    const parquesInfo = {};
+    Object.keys(DATOS.parques).forEach(p=>{
+      parquesInfo[p] = {n:bomberos[p]||0, muns:0, sup:0, pob:0};
+    });
+    Object.entries(DATOS.muns).forEach(([mun,mv])=>{
+      const a = parqueAsignado(mun);
+      if(a && parquesInfo[a.parque]){
+        parquesInfo[a.parque].muns++;
+        parquesInfo[a.parque].sup += mv.sup_km2;
+        parquesInfo[a.parque].pob += mv.pob;
+      }
+    });
+
+    // Tarjetas independientes por parque (grid 3×3)
+    const cardsHtml = Object.entries(DATOS.parques).map(([p,pv])=>{
+      const info = parquesInfo[p];
+      const cerrado = info.n <= 0;
+      const bomIco = cerrado
+        ? '<div style="color:#b31f26;font-weight:900;font-size:16px;letter-spacing:.05em;border:3px solid #b31f26;padding:3px 8px;border-radius:6px;display:inline-block;transform:rotate(-6deg)">CERRADO</div>'
+        : '<div style="font-size:26px;line-height:1;letter-spacing:-3px">'+ '🚒'.repeat(Math.min(info.n,8)) +'</div>';
+      const stats = cerrado ? '' :
+        '<div style="font-size:12px;color:#333;margin-top:6px;line-height:1.35">'+
+          '<b>'+info.muns+'</b> muns · <b>'+info.sup.toFixed(0)+'</b> km²<br>'+
+          '<b>'+info.pob.toLocaleString('es-ES')+'</b> hab'+
+        '</div>';
+      return '<div style="background:'+(cerrado?'#ffe8e8':'#fff')+';border:3px solid '+(cerrado?'#b31f26':'#1a1a1a')+';border-radius:12px;padding:10px 12px;text-align:center;box-shadow:0 3px 6px #0004">'+
+        '<div style="font-size:18px;font-weight:900;color:#b31f26;margin-bottom:4px;line-height:1.1">▲ '+p+'</div>'+
+        bomIco + stats +
+      '</div>';
+    }).join('');
+
+    // Leyenda de tiempos
+    const legendHtml =
+      '<div style="background:#fff;border:3px solid #1a1a1a;border-radius:12px;padding:12px 14px;box-shadow:0 3px 8px #0004">'+
+        '<div style="font-size:16px;font-weight:900;color:#b31f26;margin-bottom:10px;text-align:center">TIEMPO DE INTERVENCIÓN</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:700">'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="width:24px;height:20px;background:'+COL.v+';border:1.5px solid #333;border-radius:3px"></span>0 – 15 min</div>'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="width:24px;height:20px;background:'+COL.a+';border:1.5px solid #333;border-radius:3px"></span>15 – 35 min</div>'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="width:24px;height:20px;background:'+COL.n+';border:1.5px solid #333;border-radius:3px"></span>35 – 45 min</div>'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="width:24px;height:20px;background:'+COL.r+';border:1.5px solid #333;border-radius:3px"></span>&gt; 45 min</div>'+
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:6px;border-top:1px dashed #999"><span style="width:24px;height:20px;background:#95a5a6;border:1.5px solid #333;border-radius:3px"></span>Sin cobertura</div>'+
+        '</div>'+
+      '</div>';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:-99999px;top:0;width:'+W+'px;height:'+H+'px;background:#b31f26;font-family:Segoe UI,Arial,sans-serif;overflow:hidden;padding:30px;box-sizing:border-box';
+    box.innerHTML =
+      // Marco interior blanco con esquinas redondeadas (efecto tarjeta)
+      '<div style="width:100%;height:100%;background:#faf3e0;border-radius:32px;overflow:hidden;position:relative;box-shadow:inset 0 0 0 6px #fff, inset 0 0 0 10px #b31f26">'+
+        // Cabecera roja
+        '<div style="background:#b31f26;color:#fff;padding:30px 40px 26px 40px">'+
+          '<div style="display:inline-block;background:#e67e22;color:#fff;font-size:20px;font-weight:800;padding:6px 22px;border-radius:6px;letter-spacing:.06em">ℹ  INFORMACIÓN</div>'+
+          '<h1 style="font-size:64px;font-weight:900;margin:16px 0 0;line-height:1.02;letter-spacing:-.01em">Personal en Bomberos DPZ</h1>'+
+        '</div>'+
+        // Contenido: mapa + leyenda al lado
+        '<div style="display:flex;gap:20px;padding:24px 30px 20px">'+
+          '<div id="poster-mapa" style="flex:1;height:820px;background:#f4f1ea;border:3px solid #1a1a1a;border-radius:16px"></div>'+
+          '<div style="width:220px;flex-shrink:0">'+ legendHtml +'</div>'+
+        '</div>'+
+        // Tarjetas de parques (grid 3×3)
+        '<div style="padding:0 30px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+ cardsHtml +'</div>'+
+        // Footer rojo→naranja
+        '<div style="position:absolute;bottom:0;left:0;right:0;height:110px;background:linear-gradient(90deg,#b31f26 0%,#e67e22 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:900;letter-spacing:.02em">'+
+          '<span style="background:#fff;color:#b31f26;width:48px;height:48px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;margin-right:14px;font-size:28px">🔥</span>'+
+          'SOS Bomberos DPZ'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(box);
+
+    // Mapa dentro del poster (sin tiles, solo polígonos + iconos)
+    const posterMap = L.map('poster-mapa',{zoomControl:false,attributionControl:false});
+    const capaPMuns = L.layerGroup().addTo(posterMap);
+    const capaPLbls = L.layerGroup().addTo(posterMap);
+    const b = L.latLngBounds();
+    Object.entries(DATOS.muns).forEach(([mun,mv])=>{
+      if(!mv.poligonos || !mv.poligonos.length) return;
+      const asig = parqueAsignado(mun);
+      const col = asig ? colorTiempo(asig.min) : COL_GRIS;
+      mv.poligonos.forEach(poly=>{
+        if(poly.length<3) return;
+        L.polygon(poly,{color:'#333',weight:0.6,opacity:0.7,fillColor:col,fillOpacity:0.6,interactive:false}).addTo(capaPMuns);
+        poly.forEach(p=>b.extend(p));
+      });
+    });
+    // Solo un pequeño marcador con inicial de parque (los detalles van en las tarjetas)
+    Object.entries(DATOS.parques).forEach(([p,pv])=>{
+      const info = parquesInfo[p];
+      const cerrado = info.n <= 0;
+      const bg = cerrado ? '#888' : '#b31f26';
+      L.marker([pv.lat,pv.lon],{icon:L.divIcon({className:'',html:
+        '<div style="background:'+bg+';color:#fff;width:38px;height:38px;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 3px 6px #0007;transform:translate(-50%,-50%)">🚒</div>',
+        iconSize:[0,0], iconAnchor:[0,0]}),interactive:false,zIndexOffset:1000}).addTo(capaPLbls);
+    });
+    if(b.isValid()) posterMap.fitBounds(b,{padding:[20,20]});
+
+    await new Promise(r=>setTimeout(r, 400));
+
+    const canvas = await html2canvas(box,{
+      width:W, height:H, scale:1,
+      useCORS:true, allowTaint:true, backgroundColor:'#b31f26', logging:false
+    });
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sosdpz_personal_bomberos_'+new Date().toISOString().slice(0,10)+'.png';
+    a.click();
+
+    posterMap.remove();
+    document.body.removeChild(box);
+  } catch(e){
+    alert('Error generando poster: '+e.message);
+    console.error(e);
+  }
+  btn.textContent = txt;
+  btn.disabled = false;
+}
+
+// ─── Arranque ──────────────────────────────────────────────────
+fetch('datos_operativos.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+  DATOS = d;
+  // Ajustar bounds al conjunto de muns
+  const b = L.latLngBounds();
+  Object.values(DATOS.muns).forEach(mv=>{
+    (mv.poligonos||[]).forEach(poly=>poly.forEach(p=>b.extend(p)));
+  });
+  if(b.isValid()) map.fitBounds(b, {padding:[20,20]});
+  refrescar();
+}).catch(e=>{
+  document.getElementById('parques-lista').innerHTML =
+    '<div style="color:#c0392b;padding:20px">Error cargando datos: '+e.message+'</div>';
+});
+</script>
+</body>
+</html>
