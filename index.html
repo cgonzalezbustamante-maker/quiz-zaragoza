@@ -31,13 +31,40 @@
   .bom-ico{font-size:16px;margin-right:2px}
   .stats{font-size:11px;color:#444;line-height:1.5}
   .stats b{color:var(--tinta)}
-  #map-wrap{flex:1;height:100%;position:relative}
+  #map-wrap{flex:1;height:100%;position:relative;min-width:0}
   #map{width:100%;height:100%;background:#faf3e0}
   .leaflet-container{background:#faf3e0}
   #legend-map{position:absolute;top:4px;right:4px;background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:8px 10px;box-shadow:0 3px 8px #0005;z-index:1000;font-size:12px;font-weight:700;pointer-events:none}
   #legend-map .titulo{font-size:12px;font-weight:900;color:var(--rojo);margin-bottom:8px;text-align:center;letter-spacing:.03em}
   #legend-map .fila{display:flex;align-items:center;gap:7px;margin:4px 0}
   #legend-map .caja{width:22px;height:16px;border:1.5px solid #333;border-radius:3px;flex-shrink:0}
+  /* ── MÓVIL ── */
+  #toggle-panel{display:none}
+  @media (max-width:768px){
+    #app{flex-direction:column}
+    aside{width:100%;height:auto;max-height:55vh;border-right:none;border-bottom:2px solid var(--tinta);padding:10px}
+    aside h1{font-size:16px}
+    aside .sub{font-size:10px;margin-bottom:8px}
+    .leyenda{padding:6px;gap:4px;margin-bottom:8px}
+    .leyenda span{font-size:9px;padding:2px 5px}
+    .parque{padding:7px 9px;margin-bottom:6px}
+    .parque-nom{font-size:12px}
+    .bom-ctrl button{width:28px;height:28px;font-size:16px}
+    .bom-ctrl input{width:44px;font-size:14px}
+    .stats{font-size:10px}
+    .totales{font-size:11px;padding:8px}
+    #map-wrap{height:auto;flex:1;min-height:45vh}
+    #legend-map{font-size:10px;padding:5px 7px}
+    #legend-map .titulo{font-size:10px;margin-bottom:5px}
+    #legend-map .caja{width:16px;height:12px}
+    /* Botón flotante para colapsar/desplegar panel en móvil */
+    #toggle-panel{display:flex;position:fixed;top:8px;left:8px;z-index:2000;
+      background:var(--rojo);color:#fff;border:2px solid #fff;border-radius:8px;
+      width:44px;height:44px;align-items:center;justify-content:center;
+      font-size:20px;font-weight:900;cursor:pointer;box-shadow:0 3px 8px #0007}
+    aside.oculto{display:none}
+    #app.panel-oculto #map-wrap{height:100vh}
+  }
   .totales{margin-top:14px;padding:10px;background:#fff5e0;border:1.5px solid var(--oro);border-radius:6px;font-size:12px}
   .totales b{color:var(--rojo)}
   .btn-reset{margin-top:10px;width:100%;padding:8px;background:var(--tinta);color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
@@ -54,6 +81,7 @@
 </head>
 <body>
 <div id="app">
+  <button id="toggle-panel" onclick="togglePanel()" title="Mostrar/ocultar panel">☰</button>
   <aside>
     <h1>🚒 SOSDPZ · Cobertura</h1>
     <div class="sub">Cierra o abre parques ajustando bomberos. Los muns se reasignan al siguiente parque disponible.</div>
@@ -179,6 +207,13 @@ function setBom(p, v){
   refrescar();
 }
 function resetear(){ bomberos = {...BOMBEROS_DEFAULT}; refrescar(); }
+function togglePanel(){
+  const app = document.getElementById('app');
+  const aside = document.querySelector('aside');
+  aside.classList.toggle('oculto');
+  app.classList.toggle('panel-oculto');
+  setTimeout(()=>{ if(typeof map!=='undefined') map.invalidateSize(); }, 200);
+}
 
 // ─── Render mapa ───────────────────────────────────────────────
 function renderMuns(){
