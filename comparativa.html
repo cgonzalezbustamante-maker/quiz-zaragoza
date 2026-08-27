@@ -41,19 +41,21 @@
   .leaflet-container.grabbing .alava-drag{cursor:grabbing !important}
   /* Leyendas flotantes móviles sobre el mapa */
   .leg-mapa{position:absolute;z-index:1000;background:#fff;border:2px solid;border-radius:8px;
-    padding:6px 10px 8px;box-shadow:0 4px 10px #0004;min-width:200px;user-select:none;touch-action:none;cursor:grab}
+    padding:6px 10px 8px;box-shadow:0 4px 10px #0004;user-select:none;touch-action:none;cursor:grab;
+    max-width:220px}
   .leg-mapa.dragging{cursor:grabbing;box-shadow:0 8px 16px #0006}
-  .leg-mapa h3{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:4px}
+  .leg-mapa h3{margin:0 0 6px;font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap}
   .leg-mapa h3 .hnd{opacity:.5;font-size:11px;letter-spacing:-1px}
-  .leg-mapa h3 .sub{font-size:10px;font-weight:400;color:#666;margin-left:auto}
+  .leg-mapa h3 .sub{font-size:9.5px;font-weight:400;color:#666;margin-left:auto}
   .leg-mapa.zgz{border-color:var(--zgz)}
   .leg-mapa.zgz h3{color:var(--zgz)}
   .leg-mapa.alv{border-color:var(--alv)}
   .leg-mapa.alv h3{color:var(--alv)}
-  .leg-mapa table{width:100%;border-collapse:collapse;font-size:11px;line-height:1.35}
-  .leg-mapa td{padding:1px 0}
-  .leg-mapa td:last-child{text-align:right;font-weight:800}
-  .leg-mapa .foot{font-size:9.5px;color:#8a3a3a;margin-top:5px;line-height:1.3;border-top:1px dashed #ddd;padding-top:4px}
+  .leg-mapa table{width:auto;border-collapse:collapse;font-size:11px;line-height:1.35}
+  .leg-mapa td{padding:1px 0;white-space:nowrap}
+  .leg-mapa td:first-child{padding-right:8px;color:#555}
+  .leg-mapa td:last-child{text-align:left;font-weight:800}
+  .leg-mapa .foot{font-size:9.5px;color:#8a3a3a;margin-top:5px;line-height:1.3;border-top:1px dashed #ddd;padding-top:4px;white-space:normal;max-width:200px}
   @media (max-width:768px){
     #app{flex-direction:column}
     aside{width:100%;max-height:50vh;border-right:none;border-bottom:2px solid var(--tinta)}
