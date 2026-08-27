@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOSDPZ · Comparativa Zaragoza – Álava</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  :root{--bg:#f4f1ea;--pane:#fff;--tinta:#1a1a1a;--oro:#c9a24b;--rojo:#b31f26;
+    --zgz:#b31f26;--alv:#0a5c36}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--tinta)}
+  #app{display:flex;height:100vh;overflow:hidden}
+  aside{width:340px;background:var(--pane);border-right:2px solid var(--tinta);padding:14px;overflow-y:auto;flex-shrink:0}
+  h1{color:var(--rojo);font-size:18px;margin:0 0 4px}
+  .sub{font-size:11px;color:#666;margin-bottom:12px}
+  .card{background:#fff;border:2px solid;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+  .card.zgz{border-color:var(--zgz)}
+  .card.alv{border-color:var(--alv)}
+  .card h2{margin:0 0 8px;font-size:15px}
+  .card.zgz h2{color:var(--zgz)}
+  .card.alv h2{color:var(--alv)}
+  .card table{width:100%;border-collapse:collapse;font-size:12px}
+  .card td{padding:2px 0}
+  .card td:last-child{text-align:right;font-weight:800}
+  .card.ratio{background:#fff5e0;border-color:var(--oro)}
+  .card.ratio td:last-child{color:var(--rojo)}
+  .parques-lista{margin-top:6px;font-size:11px;line-height:1.5}
+  .parques-lista .p{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ddd}
+  .parques-lista .p b{color:var(--tinta)}
+  #map-wrap{flex:1;position:relative}
+  #map{width:100%;height:100%;background:#faf3e0}
+  .leaflet-container{background:#faf3e0}
+  .lbl-parque{background:rgba(255,255,255,.9);border:2px solid #1a1a1a;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:800;pointer-events:none;white-space:nowrap;box-shadow:0 2px 4px #0004}
+  .lbl-parque.zgz{border-color:var(--zgz);color:var(--zgz)}
+  .lbl-parque.alv{border-color:var(--alv);color:var(--alv)}
+  .prov-lbl{background:transparent;border:none;color:#000;font-size:20px;font-weight:900;pointer-events:none;text-shadow:0 0 3px #fff,1px 1px 0 #fff,-1px 1px 0 #fff,1px -1px 0 #fff,-1px -1px 0 #fff}
+  @media (max-width:768px){
+    #app{flex-direction:column}
+    aside{width:100%;max-height:50vh;border-right:none;border-bottom:2px solid var(--tinta)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h1>🚒 Comparativa</h1>
+    <div class="sub">Provincia de Zaragoza vs. Provincia de Álava · A escala real</div>
+    <div class="card zgz">
+      <h2>Zaragoza (DPZ)</h2>
+      <table>
+        <tr><td>Superficie</td><td>17.274 km²</td></tr>
+        <tr><td>Población</td><td>966.438 hab</td></tr>
+        <tr><td>Densidad</td><td>56 hab/km²</td></tr>
+        <tr><td>Nº municipios</td><td>293</td></tr>
+        <tr><td>Nº parques</td><td id="zgz-parques">9</td></tr>
+        <tr><td>Bomberos/turno (activos)</td><td id="zgz-boms">–</td></tr>
+      </table>
+      <div class="parques-lista" id="zgz-lista"></div>
+    </div>
+    <div class="card alv">
+      <h2>Álava</h2>
+      <table>
+        <tr><td>Superficie</td><td>3.037 km²</td></tr>
+        <tr><td>Población</td><td>336.036 hab</td></tr>
+        <tr><td>Densidad</td><td>111 hab/km²</td></tr>
+        <tr><td>Nº parques</td><td>6</td></tr>
+        <tr><td>Bomberos/turno (por día)</td><td id="alv-boms">–</td></tr>
+      </table>
+      <div class="parques-lista" id="alv-lista"></div>
+    </div>
+    <div class="card ratio">
+      <h2>Ratios</h2>
+      <table id="ratios"></table>
+    </div>
+  </aside>
+  <div id="map-wrap"><div id="map"></div></div>
+</div>
+<script>
+// ─── Parques Zaragoza (por defecto de SOSDPZ) ────────────────
+const PARQUES_ZGZ = [
+  {n:'Tarazona',                  lat:41.9042, lon:-1.7229, dia:4},
+  {n:'Ejea de los Caballeros',    lat:42.1265, lon:-1.1381, dia:4},
+  {n:'Tauste',                    lat:41.9179, lon:-1.2582, dia:2},
+  {n:'La Almunia',                lat:41.4823, lon:-1.3706, dia:4},
+  {n:'Calatayud',                 lat:41.3520, lon:-1.6432, dia:4},
+  {n:'Cariñena',                  lat:41.3379, lon:-1.2276, dia:2},
+  {n:'Daroca',                    lat:41.1156, lon:-1.4141, dia:2},
+  {n:'Caspe',                     lat:41.2350, lon:-0.0388, dia:4},
+  {n:'El Burgo de Ebro',          lat:41.5820, lon:-0.7370, dia:2},
+];
+// Suma bomberos/día Zaragoza
+const zgzBoms = PARQUES_ZGZ.reduce((s,p)=>s+p.dia, 0);
+document.getElementById('zgz-boms').textContent = zgzBoms + ' (defecto SOSDPZ)';
+const zgzLista = document.getElementById('zgz-lista');
+PARQUES_ZGZ.forEach(p=>{
+  zgzLista.insertAdjacentHTML('beforeend',
+    '<div class="p"><span>▲ '+p.n+'</span><b>'+p.dia+' bomb/turno</b></div>');
+});
+
+// ─── Mapa ────────────────────────────────────────────────────
+const map = L.map('map',{zoomControl:true,attributionControl:false,zoomSnap:0.25,zoomDelta:0.25}).setView([42.4,-1.8],7.5);
+// Sin tiles: sólo polígonos a escala real
+const capaProv = L.layerGroup().addTo(map);
+const capaPq = L.layerGroup().addTo(map);
+const capaLbl = L.layerGroup().addTo(map);
+
+fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+  // Zaragoza — polígono a partir de limite_provincia.json (formato del proyecto)
+  const zgzLim = d.zaragoza.geojson && d.zaragoza.geojson.limite;
+  if(Array.isArray(zgzLim)){
+    zgzLim.forEach(poly=>{
+      if(poly.length<3) return;
+      L.polygon(poly.map(p=>[p[0],p[1]]),{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
+    });
+  }
+  // Álava — GeoJSON Polygon [ring[[lon,lat],...]]
+  const alv = d.alava.geojson;
+  const rings = alv.type==='Polygon' ? [alv.coordinates] : alv.coordinates;
+  rings.forEach(polygon=>{
+    polygon.forEach(ring=>{
+      if(ring.length<3) return;
+      // GeoJSON usa [lon,lat] → Leaflet quiere [lat,lon]
+      const latlngs = ring.map(p=>[p[1],p[0]]);
+      L.polygon(latlngs,{color:'#054523',weight:2.5,fillColor:'#0a5c36',fillOpacity:.28,interactive:false}).addTo(capaProv);
+    });
+  });
+
+  // Etiquetas provincia (centroides aprox)
+  L.marker([41.65,-1.10],{icon:L.divIcon({className:'',html:'<div class="prov-lbl">ZARAGOZA</div>',iconSize:null,iconAnchor:[60,0]}),interactive:false}).addTo(capaLbl);
+  L.marker([42.85,-2.68],{icon:L.divIcon({className:'',html:'<div class="prov-lbl">ÁLAVA</div>',iconSize:null,iconAnchor:[50,0]}),interactive:false}).addTo(capaLbl);
+
+  // Parques Zaragoza
+  PARQUES_ZGZ.forEach(p=>{
+    L.circleMarker([p.lat,p.lon],{radius:6,color:'#1a1a1a',fillColor:'#b31f26',fillOpacity:1,weight:2}).addTo(capaPq);
+    L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
+      html:'<div class="lbl-parque zgz">🚒 '+p.n+' · <b>'+p.dia+'</b></div>',
+      iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaLbl);
+  });
+
+  // Parques Álava
+  const alvLista = document.getElementById('alv-lista');
+  let alvBoms = 0;
+  Object.entries(d.alava.parques).forEach(([n,p])=>{
+    alvBoms += p.por_turno;
+    L.circleMarker([p.lat,p.lon],{radius:6,color:'#1a1a1a',fillColor:'#0a5c36',fillOpacity:1,weight:2}).addTo(capaPq);
+    L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
+      html:'<div class="lbl-parque alv">🚒 '+n+' · <b>'+p.por_turno+'</b></div>',
+      iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaLbl);
+    alvLista.insertAdjacentHTML('beforeend',
+      '<div class="p"><span>▲ '+n+'</span><b>'+p.por_turno+' bomb/turno</b></div>');
+  });
+  document.getElementById('alv-boms').textContent = alvBoms;
+
+  // Ratios
+  const supZ=17274, popZ=966438, supA=3037, popA=336036, pqZ=9, pqA=6;
+  const km2xParqueZ = (supZ/pqZ).toFixed(0);
+  const km2xParqueA = (supA/pqA).toFixed(0);
+  const habxBomZ = (popZ/zgzBoms).toFixed(0);
+  const habxBomA = (popA/alvBoms).toFixed(0);
+  const km2xBomZ = (supZ/zgzBoms).toFixed(0);
+  const km2xBomA = (supA/alvBoms).toFixed(0);
+  document.getElementById('ratios').innerHTML =
+    '<tr><td>Superficie ZGZ / Álava</td><td>×'+(supZ/supA).toFixed(1)+'</td></tr>'+
+    '<tr><td>Población ZGZ / Álava</td><td>×'+(popZ/popA).toFixed(1)+'</td></tr>'+
+    '<tr><td>km² por parque · ZGZ</td><td>'+km2xParqueZ+'</td></tr>'+
+    '<tr><td>km² por parque · Álava</td><td>'+km2xParqueA+'</td></tr>'+
+    '<tr><td>hab por bombero/día · ZGZ</td><td>'+habxBomZ+'</td></tr>'+
+    '<tr><td>hab por bombero/día · Álava</td><td>'+habxBomA+'</td></tr>'+
+    '<tr><td>km² por bombero/día · ZGZ</td><td>'+km2xBomZ+'</td></tr>'+
+    '<tr><td>km² por bombero/día · Álava</td><td>'+km2xBomA+'</td></tr>';
+
+  // Encuadrar
+  const bb = L.latLngBounds();
+  capaProv.eachLayer(l=>{
+    if(l.getLatLngs) l.getLatLngs().forEach(r=>{
+      const arr = Array.isArray(r[0])? r.flat(): r;
+      arr.forEach(p=>bb.extend(p));
+    });
+  });
+  if(bb.isValid()) map.fitBounds(bb,{padding:[30,30]});
+});
+</script>
+</body>
+</html>
