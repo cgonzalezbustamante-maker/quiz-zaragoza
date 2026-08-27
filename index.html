@@ -34,7 +34,7 @@
   #map-wrap{flex:1;height:100%;position:relative;min-width:0}
   #map{width:100%;height:100%;background:#faf3e0}
   .leaflet-container{background:#faf3e0}
-  #legend-map{position:absolute;top:4px;right:4px;background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:8px 10px;box-shadow:0 3px 8px #0005;z-index:1000;font-size:12px;font-weight:700;pointer-events:none}
+  #legend-map{position:absolute;top:18px;right:14px;background:#fff;border:2px solid #1a1a1a;border-radius:8px;padding:8px 10px;box-shadow:0 3px 8px #0005;z-index:1000;font-size:12px;font-weight:700;pointer-events:none}
   #legend-map .titulo{font-size:12px;font-weight:900;color:var(--rojo);margin-bottom:8px;text-align:center;letter-spacing:.03em}
   #legend-map .fila{display:flex;align-items:center;gap:7px;margin:4px 0}
   #legend-map .caja{width:22px;height:16px;border:1.5px solid #333;border-radius:3px;flex-shrink:0}
@@ -322,7 +322,7 @@ function renderParques(){
     //   queda arriba-derecha).
     const ANCHORS = {
       'Calatayud':                    [110, 78],  // inf-dcha coincide → etiq arriba-izq
-      'La Almunia de Doña Godina':    [0, 78],    // inf-izq coincide → etiq arriba-dcha
+      'La Almunia de Doña Godina':    [37, 78],   // inf-izq desplazada 1/3 a la izq
       'Ejea de los Caballeros':       [0, 78],    // inf-izq coincide → etiq arriba-dcha
       'Tarazona':                     [110, 0],   // sup-dcha coincide → etiq abajo-izq
       'El Burgo de Ebro':             [0, 78],    // inf-izq coincide → etiq arriba-dcha
