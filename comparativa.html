@@ -36,6 +36,9 @@
   .lbl-parque.zgz{border-color:var(--zgz);color:var(--zgz)}
   .lbl-parque.alv{border-color:var(--alv);color:var(--alv)}
   .prov-lbl{background:transparent;border:none;color:#000;font-size:20px;font-weight:900;pointer-events:none;text-shadow:0 0 3px #fff,1px 1px 0 #fff,-1px 1px 0 #fff,1px -1px 0 #fff,-1px -1px 0 #fff}
+  .alava-drag{cursor:grab}
+  .leaflet-container.grabbing{cursor:grabbing !important}
+  .leaflet-container.grabbing .alava-drag{cursor:grabbing !important}
   @media (max-width:768px){
     #app{flex-direction:column}
     aside{width:100%;max-height:50vh;border-right:none;border-bottom:2px solid var(--tinta)}
@@ -105,6 +108,11 @@ const map = L.map('map',{zoomControl:true,attributionControl:false,zoomSnap:0.25
 const capaProv = L.layerGroup().addTo(map);
 const capaPq = L.layerGroup().addTo(map);
 const capaLbl = L.layerGroup().addTo(map);
+// Capa Álava (featureGroup para que propague eventos de sus hijos)
+const capaAlava = L.featureGroup().addTo(map);
+let ALAVA_RINGS = [];   // rings base [[[lat,lon],...],...]
+let ALAVA_PARQUES = []; // {n,lat,lon,por_turno}
+let ALAVA_OFF = [0, 0]; // desplazamiento [dLat, dLon] aplicado
 
 fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   // Zaragoza — un solo polígono en el formato del proyecto:
@@ -113,23 +121,11 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   if(Array.isArray(zgzLim) && zgzLim.length>2 && zgzLim[0].length===2){
     L.polygon(zgzLim,{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
   }
-  // Álava — GeoJSON Polygon [ring[[lon,lat],...]]
-  const alv = d.alava.geojson;
-  const rings = alv.type==='Polygon' ? [alv.coordinates] : alv.coordinates;
-  rings.forEach(polygon=>{
-    polygon.forEach(ring=>{
-      if(ring.length<3) return;
-      // GeoJSON usa [lon,lat] → Leaflet quiere [lat,lon]
-      const latlngs = ring.map(p=>[p[1],p[0]]);
-      L.polygon(latlngs,{color:'#054523',weight:2.5,fillColor:'#0a5c36',fillOpacity:.28,interactive:false}).addTo(capaProv);
-    });
-  });
 
-  // Etiquetas provincia (centroides aprox)
+  // Etiqueta ZARAGOZA (fija)
   L.marker([41.65,-1.10],{icon:L.divIcon({className:'',html:'<div class="prov-lbl">ZARAGOZA</div>',iconSize:null,iconAnchor:[60,0]}),interactive:false}).addTo(capaLbl);
-  L.marker([42.85,-2.68],{icon:L.divIcon({className:'',html:'<div class="prov-lbl">ÁLAVA</div>',iconSize:null,iconAnchor:[50,0]}),interactive:false}).addTo(capaLbl);
 
-  // Parques Zaragoza
+  // Parques Zaragoza (fijos)
   PARQUES_ZGZ.forEach(p=>{
     L.circleMarker([p.lat,p.lon],{radius:6,color:'#1a1a1a',fillColor:'#b31f26',fillOpacity:1,weight:2}).addTo(capaPq);
     L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
@@ -137,19 +133,30 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
       iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaLbl);
   });
 
-  // Parques Álava
+  // ── Álava: preparar datos base para poder arrastrar en bloque ──
+  const alv = d.alava.geojson;
+  const rings = alv.type==='Polygon' ? [alv.coordinates] : alv.coordinates;
+  ALAVA_RINGS = [];
+  rings.forEach(polygon=>{
+    polygon.forEach(ring=>{
+      if(ring.length<3) return;
+      ALAVA_RINGS.push(ring.map(p=>[p[1],p[0]])); // [lat,lon]
+    });
+  });
+  ALAVA_PARQUES = Object.entries(d.alava.parques).map(([n,p])=>({n, lat:p.lat, lon:p.lon, por_turno:p.por_turno}));
+
+  // Ficha lateral (usa coordenadas base, no depende del offset)
   const alvLista = document.getElementById('alv-lista');
   let alvBoms = 0;
-  Object.entries(d.alava.parques).forEach(([n,p])=>{
+  ALAVA_PARQUES.forEach(p=>{
     alvBoms += p.por_turno;
-    L.circleMarker([p.lat,p.lon],{radius:6,color:'#1a1a1a',fillColor:'#0a5c36',fillOpacity:1,weight:2}).addTo(capaPq);
-    L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',
-      html:'<div class="lbl-parque alv">🚒 '+n+' · <b>'+p.por_turno+'</b></div>',
-      iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaLbl);
     alvLista.insertAdjacentHTML('beforeend',
-      '<div class="p"><span>▲ '+n+'</span><b>'+p.por_turno+' bomb/turno</b></div>');
+      '<div class="p"><span>▲ '+p.n+'</span><b>'+p.por_turno+' bomb/turno</b></div>');
   });
   document.getElementById('alv-boms').textContent = alvBoms;
+
+  renderAlava(); // primera pintura
+  setupAlavaDrag();
 
   // Ratios
   const supZ=17274, popZ=966438, supA=3037, popA=336036, pqZ=9, pqA=6;
@@ -169,7 +176,7 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
     '<tr><td>km² por bombero/día · ZGZ</td><td>'+km2xBomZ+'</td></tr>'+
     '<tr><td>km² por bombero/día · Álava</td><td>'+km2xBomA+'</td></tr>';
 
-  // Encuadrar
+  // Encuadrar (Zgz fija + Álava en su posición base)
   const bb = L.latLngBounds();
   capaProv.eachLayer(l=>{
     if(l.getLatLngs) l.getLatLngs().forEach(r=>{
@@ -177,8 +184,74 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
       arr.forEach(p=>bb.extend(p));
     });
   });
+  ALAVA_RINGS.forEach(ring=>ring.forEach(p=>bb.extend(p)));
   if(bb.isValid()) map.fitBounds(bb,{padding:[30,30]});
 });
+
+// ─── Álava arrastrable en bloque ─────────────────────────────
+function renderAlava(){
+  capaAlava.clearLayers();
+  const dLat = ALAVA_OFF[0], dLon = ALAVA_OFF[1];
+
+  // Polígonos (uno o varios anillos)
+  ALAVA_RINGS.forEach(ring=>{
+    const desp = ring.map(p=>[p[0]+dLat, p[1]+dLon]);
+    L.polygon(desp,{color:'#054523',weight:2.5,fillColor:'#0a5c36',fillOpacity:.28,
+      className:'alava-drag', interactive:true}).addTo(capaAlava);
+  });
+
+  // Etiqueta ÁLAVA (centro aproximado)
+  L.marker([42.85+dLat, -2.68+dLon],{icon:L.divIcon({className:'',
+    html:'<div class="prov-lbl">ÁLAVA</div>',iconSize:null,iconAnchor:[50,0]}),
+    interactive:false}).addTo(capaAlava);
+
+  // Parques (círculo + etiqueta)
+  ALAVA_PARQUES.forEach(p=>{
+    L.circleMarker([p.lat+dLat, p.lon+dLon],{radius:6,color:'#1a1a1a',
+      fillColor:'#0a5c36',fillOpacity:1,weight:2, className:'alava-drag',
+      interactive:true}).addTo(capaAlava);
+    L.marker([p.lat+dLat, p.lon+dLon],{icon:L.divIcon({className:'',
+      html:'<div class="lbl-parque alv">🚒 '+p.n+' · <b>'+p.por_turno+'</b></div>',
+      iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaAlava);
+  });
+}
+
+function setupAlavaDrag(){
+  let dragging = false;
+  let startLL = null;
+
+  // mousedown y touchstart en cualquier elemento marcado 'alava-drag'
+  capaAlava.on('mousedown', ev=>{
+    // Sólo si el evento parte del polígono o círculo (marcados con className)
+    const path = ev.originalEvent.target;
+    if(!path || !path.classList || !path.classList.contains('alava-drag')) return;
+    dragging = true;
+    startLL = ev.latlng;
+    map.dragging.disable();
+    L.DomUtil.addClass(map.getContainer(),'grabbing');
+    L.DomEvent.stopPropagation(ev.originalEvent);
+    L.DomEvent.preventDefault(ev.originalEvent);
+  });
+
+  map.on('mousemove', ev=>{
+    if(!dragging || !startLL) return;
+    const dLat = ev.latlng.lat - startLL.lat;
+    const dLon = ev.latlng.lng - startLL.lng;
+    ALAVA_OFF = [ALAVA_OFF[0]+dLat, ALAVA_OFF[1]+dLon];
+    startLL = ev.latlng;
+    renderAlava();
+  });
+
+  const stop = ()=>{
+    if(!dragging) return;
+    dragging = false;
+    startLL = null;
+    map.dragging.enable();
+    L.DomUtil.removeClass(map.getContainer(),'grabbing');
+  };
+  map.on('mouseup', stop);
+  map.on('mouseleave', stop);
+}
 </script>
 </body>
 </html>
