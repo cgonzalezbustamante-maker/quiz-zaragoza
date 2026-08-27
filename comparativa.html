@@ -107,13 +107,11 @@ const capaPq = L.layerGroup().addTo(map);
 const capaLbl = L.layerGroup().addTo(map);
 
 fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
-  // Zaragoza — polígono a partir de limite_provincia.json (formato del proyecto)
+  // Zaragoza — un solo polígono en el formato del proyecto:
+  // {"limite":[[lat,lon],[lat,lon],...]}
   const zgzLim = d.zaragoza.geojson && d.zaragoza.geojson.limite;
-  if(Array.isArray(zgzLim)){
-    zgzLim.forEach(poly=>{
-      if(poly.length<3) return;
-      L.polygon(poly.map(p=>[p[0],p[1]]),{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
-    });
+  if(Array.isArray(zgzLim) && zgzLim.length>2 && zgzLim[0].length===2){
+    L.polygon(zgzLim,{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
   }
   // Álava — GeoJSON Polygon [ring[[lon,lat],...]]
   const alv = d.alava.geojson;
