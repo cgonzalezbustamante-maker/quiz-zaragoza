@@ -39,6 +39,21 @@
   .alava-drag{cursor:grab}
   .leaflet-container.grabbing{cursor:grabbing !important}
   .leaflet-container.grabbing .alava-drag{cursor:grabbing !important}
+  /* Leyendas flotantes móviles sobre el mapa */
+  .leg-mapa{position:absolute;z-index:1000;background:#fff;border:2px solid;border-radius:8px;
+    padding:6px 10px 8px;box-shadow:0 4px 10px #0004;min-width:200px;user-select:none;touch-action:none;cursor:grab}
+  .leg-mapa.dragging{cursor:grabbing;box-shadow:0 8px 16px #0006}
+  .leg-mapa h3{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:4px}
+  .leg-mapa h3 .hnd{opacity:.5;font-size:11px;letter-spacing:-1px}
+  .leg-mapa h3 .sub{font-size:10px;font-weight:400;color:#666;margin-left:auto}
+  .leg-mapa.zgz{border-color:var(--zgz)}
+  .leg-mapa.zgz h3{color:var(--zgz)}
+  .leg-mapa.alv{border-color:var(--alv)}
+  .leg-mapa.alv h3{color:var(--alv)}
+  .leg-mapa table{width:100%;border-collapse:collapse;font-size:11px;line-height:1.35}
+  .leg-mapa td{padding:1px 0}
+  .leg-mapa td:last-child{text-align:right;font-weight:800}
+  .leg-mapa .foot{font-size:9.5px;color:#8a3a3a;margin-top:5px;line-height:1.3;border-top:1px dashed #ddd;padding-top:4px}
   @media (max-width:768px){
     #app{flex-direction:column}
     aside{width:100%;max-height:50vh;border-right:none;border-bottom:2px solid var(--tinta)}
@@ -51,32 +66,11 @@
     <h1>🚒 Comparativa</h1>
     <div class="sub">Provincia de Zaragoza vs. Provincia de Álava · A escala real</div>
     <div class="card zgz">
-      <h2>Zaragoza (DPZ) <span style="font-size:11px;font-weight:400;color:#666">(sin capital)</span></h2>
-      <table>
-        <tr><td>Superficie</td><td>16.211 km²</td></tr>
-        <tr><td>Población</td><td>293.428 hab</td></tr>
-        <tr><td>Densidad</td><td>18 hab/km²</td></tr>
-        <tr><td>Nº municipios</td><td>292</td></tr>
-        <tr><td>Nº parques</td><td id="zgz-parques">9</td></tr>
-        <tr><td>Bomberos/turno (activos)</td><td id="zgz-boms">–</td></tr>
-      </table>
-      <div style="font-size:10px;color:#8a3a3a;margin-top:6px;line-height:1.35">
-        ⚠ Zaragoza capital (1.063 km², 673.010 hab) tiene <b>servicio de bomberos municipal propio</b> — no cubierto por la Diputación Provincial. Recortada del polígono y descontada de los datos.
-      </div>
+      <h2>Parques · Zaragoza (DPZ)</h2>
       <div class="parques-lista" id="zgz-lista"></div>
     </div>
     <div class="card alv">
-      <h2>Álava <span style="font-size:11px;font-weight:400;color:#666">(sin Vitoria)</span></h2>
-      <table>
-        <tr><td>Superficie</td><td>2.760 km²</td></tr>
-        <tr><td>Población</td><td>82.364 hab</td></tr>
-        <tr><td>Densidad</td><td>30 hab/km²</td></tr>
-        <tr><td>Nº parques</td><td>6</td></tr>
-        <tr><td>Bomberos/turno (por día)</td><td id="alv-boms">–</td></tr>
-      </table>
-      <div style="font-size:10px;color:#8a3a3a;margin-top:6px;line-height:1.35">
-        ⚠ Vitoria-Gasteiz (277 km², 253.672 hab) tiene <b>servicio de bomberos municipal propio</b> — no cubierto por la Diputación Foral. Recortada del polígono y descontada de los datos.
-      </div>
+      <h2>Parques · Álava (Foral)</h2>
       <div class="parques-lista" id="alv-lista"></div>
     </div>
     <div class="card ratio">
@@ -84,7 +78,33 @@
       <table id="ratios"></table>
     </div>
   </aside>
-  <div id="map-wrap"><div id="map"></div></div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <!-- Leyendas flotantes móviles (arrastrables por el usuario) -->
+    <div id="leg-zgz" class="leg-mapa zgz" style="top:14px;left:14px">
+      <h3><span class="hnd">⋮⋮</span>Zaragoza · DPZ<span class="sub">sin capital</span></h3>
+      <table>
+        <tr><td>Superficie</td><td>16.211 km²</td></tr>
+        <tr><td>Población</td><td>293.428 hab</td></tr>
+        <tr><td>Densidad</td><td>18 hab/km²</td></tr>
+        <tr><td>Municipios</td><td>292</td></tr>
+        <tr><td>Parques</td><td>9</td></tr>
+        <tr><td>Bomberos/turno</td><td id="lm-zgz-boms">–</td></tr>
+      </table>
+      <div class="foot">⚠ Zaragoza capital (1.063 km², 673.010 hab) tiene servicio de bomberos municipal propio — recortada del polígono.</div>
+    </div>
+    <div id="leg-alv" class="leg-mapa alv" style="top:14px;right:14px">
+      <h3><span class="hnd">⋮⋮</span>Álava · Foral<span class="sub">sin Vitoria</span></h3>
+      <table>
+        <tr><td>Superficie</td><td>2.760 km²</td></tr>
+        <tr><td>Población</td><td>82.364 hab</td></tr>
+        <tr><td>Densidad</td><td>30 hab/km²</td></tr>
+        <tr><td>Parques</td><td>6</td></tr>
+        <tr><td>Bomberos/turno</td><td id="lm-alv-boms">–</td></tr>
+      </table>
+      <div class="foot">⚠ Vitoria-Gasteiz (277 km², 253.672 hab) tiene servicio de bomberos municipal propio — recortada del polígono.</div>
+    </div>
+  </div>
 </div>
 <script>
 // ─── Parques Zaragoza (por defecto de SOSDPZ) ────────────────
@@ -101,7 +121,7 @@ const PARQUES_ZGZ = [
 ];
 // Suma bomberos/día Zaragoza
 const zgzBoms = PARQUES_ZGZ.reduce((s,p)=>s+p.dia, 0);
-document.getElementById('zgz-boms').textContent = zgzBoms + ' (defecto SOSDPZ)';
+document.getElementById('lm-zgz-boms').textContent = zgzBoms + ' (defecto)';
 const zgzLista = document.getElementById('zgz-lista');
 PARQUES_ZGZ.forEach(p=>{
   zgzLista.insertAdjacentHTML('beforeend',
@@ -164,7 +184,7 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
     alvLista.insertAdjacentHTML('beforeend',
       '<div class="p"><span>▲ '+p.n+'</span><b>'+p.por_turno+' bomb/turno</b></div>');
   });
-  document.getElementById('alv-boms').textContent = alvBoms;
+  document.getElementById('lm-alv-boms').textContent = alvBoms;
 
   renderAlava(); // primera pintura
   setupAlavaDrag();
@@ -271,6 +291,45 @@ function setupAlavaDrag(){
   map.on('mouseup', stop);
   map.on('mouseleave', stop);
 }
+
+// ─── Leyendas móviles del mapa (arrastrar con ratón y táctil) ───
+function makeDraggable(el){
+  const wrap = document.getElementById('map-wrap');
+  let sx=0, sy=0, ox=0, oy=0, drag=false;
+
+  const start = (px,py)=>{
+    drag = true;
+    const r = el.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    // Convertir a top/left relativos al contenedor (por si venía con "right")
+    el.style.left = (r.left - w.left) + 'px';
+    el.style.top  = (r.top  - w.top ) + 'px';
+    el.style.right = 'auto'; el.style.bottom='auto';
+    sx = px; sy = py;
+    ox = r.left - w.left; oy = r.top - w.top;
+    el.classList.add('dragging');
+  };
+  const move = (px,py)=>{
+    if(!drag) return;
+    const w = wrap.getBoundingClientRect();
+    let nx = ox + (px - sx), ny = oy + (py - sy);
+    // Mantener dentro del contenedor
+    nx = Math.max(0, Math.min(nx, w.width  - el.offsetWidth));
+    ny = Math.max(0, Math.min(ny, w.height - el.offsetHeight));
+    el.style.left = nx + 'px';
+    el.style.top  = ny + 'px';
+  };
+  const end = ()=>{ drag=false; el.classList.remove('dragging'); };
+
+  el.addEventListener('mousedown', e=>{ start(e.clientX,e.clientY); e.preventDefault(); });
+  window.addEventListener('mousemove', e=> move(e.clientX,e.clientY));
+  window.addEventListener('mouseup', end);
+  el.addEventListener('touchstart', e=>{ const t=e.touches[0]; start(t.clientX,t.clientY); }, {passive:true});
+  window.addEventListener('touchmove', e=>{ const t=e.touches[0]; if(t) move(t.clientX,t.clientY); }, {passive:true});
+  window.addEventListener('touchend', end);
+}
+makeDraggable(document.getElementById('leg-zgz'));
+makeDraggable(document.getElementById('leg-alv'));
 </script>
 </body>
 </html>
