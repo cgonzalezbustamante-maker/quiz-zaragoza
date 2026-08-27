@@ -63,14 +63,17 @@
       <div class="parques-lista" id="zgz-lista"></div>
     </div>
     <div class="card alv">
-      <h2>Álava</h2>
+      <h2>Álava <span style="font-size:11px;font-weight:400;color:#666">(sin Vitoria)</span></h2>
       <table>
-        <tr><td>Superficie</td><td>3.037 km²</td></tr>
-        <tr><td>Población</td><td>336.036 hab</td></tr>
-        <tr><td>Densidad</td><td>111 hab/km²</td></tr>
+        <tr><td>Superficie</td><td>2.760 km²</td></tr>
+        <tr><td>Población</td><td>82.364 hab</td></tr>
+        <tr><td>Densidad</td><td>30 hab/km²</td></tr>
         <tr><td>Nº parques</td><td>6</td></tr>
         <tr><td>Bomberos/turno (por día)</td><td id="alv-boms">–</td></tr>
       </table>
+      <div style="font-size:10px;color:#8a3a3a;margin-top:6px;line-height:1.35">
+        ⚠ Vitoria-Gasteiz (277 km², 253.672 hab) tiene <b>servicio de bomberos municipal propio</b> — no cubierto por la Diputación Foral. Recortada del polígono y descontada de los datos.
+      </div>
       <div class="parques-lista" id="alv-lista"></div>
     </div>
     <div class="card ratio">
@@ -110,7 +113,7 @@ const capaPq = L.layerGroup().addTo(map);
 const capaLbl = L.layerGroup().addTo(map);
 // Capa Álava (featureGroup para que propague eventos de sus hijos)
 const capaAlava = L.featureGroup().addTo(map);
-let ALAVA_RINGS = [];   // rings base [[[lat,lon],...],...]
+let ALAVA_RINGS = [];   // cada polígono como [outerRing, ...holes]
 let ALAVA_PARQUES = []; // {n,lat,lon,por_turno}
 let ALAVA_OFF = [0, 0]; // desplazamiento [dLat, dLon] aplicado
 
@@ -135,13 +138,16 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
 
   // ── Álava: preparar datos base para poder arrastrar en bloque ──
   const alv = d.alava.geojson;
-  const rings = alv.type==='Polygon' ? [alv.coordinates] : alv.coordinates;
+  const polys = alv.type==='Polygon' ? [alv.coordinates] : alv.coordinates;
+  // Vitoria-Gasteiz como agujero (servicio de bomberos municipal propio)
+  const vit = d.alava.vitoria_hole;
+  const vitPolys = vit ? (vit.type==='Polygon' ? [vit.coordinates] : vit.coordinates) : [];
+  const vitHoles = vitPolys.map(p=>p[0].map(pt=>[pt[1],pt[0]])); // rings exteriores de Vitoria → agujeros
   ALAVA_RINGS = [];
-  rings.forEach(polygon=>{
-    polygon.forEach(ring=>{
-      if(ring.length<3) return;
-      ALAVA_RINGS.push(ring.map(p=>[p[1],p[0]])); // [lat,lon]
-    });
+  polys.forEach(polygon=>{
+    const outer = polygon[0].map(p=>[p[1],p[0]]);       // ring exterior
+    const holes = polygon.slice(1).map(r=>r.map(p=>[p[1],p[0]]));
+    ALAVA_RINGS.push([outer, ...holes, ...vitHoles]);   // añadir Vitoria como hueco al polígono principal
   });
   ALAVA_PARQUES = Object.entries(d.alava.parques).map(([n,p])=>({n, lat:p.lat, lon:p.lon, por_turno:p.por_turno}));
 
@@ -158,8 +164,8 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   renderAlava(); // primera pintura
   setupAlavaDrag();
 
-  // Ratios
-  const supZ=17274, popZ=966438, supA=3037, popA=336036, pqZ=9, pqA=6;
+  // Ratios (Álava sin Vitoria-Gasteiz — servicio de bomberos municipal propio)
+  const supZ=17274, popZ=966438, supA=2760, popA=82364, pqZ=9, pqA=6;
   const km2xParqueZ = (supZ/pqZ).toFixed(0);
   const km2xParqueA = (supA/pqA).toFixed(0);
   const habxBomZ = (popZ/zgzBoms).toFixed(0);
@@ -184,7 +190,7 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
       arr.forEach(p=>bb.extend(p));
     });
   });
-  ALAVA_RINGS.forEach(ring=>ring.forEach(p=>bb.extend(p)));
+  ALAVA_RINGS.forEach(poly=>poly[0].forEach(p=>bb.extend(p))); // sólo ring exterior para bounds
   if(bb.isValid()) map.fitBounds(bb,{padding:[30,30]});
 });
 
@@ -193,9 +199,9 @@ function renderAlava(){
   capaAlava.clearLayers();
   const dLat = ALAVA_OFF[0], dLon = ALAVA_OFF[1];
 
-  // Polígonos (uno o varios anillos)
-  ALAVA_RINGS.forEach(ring=>{
-    const desp = ring.map(p=>[p[0]+dLat, p[1]+dLon]);
+  // Polígonos con huecos (Vitoria-Gasteiz recortada)
+  ALAVA_RINGS.forEach(poly=>{
+    const desp = poly.map(ring=>ring.map(p=>[p[0]+dLat, p[1]+dLon]));
     L.polygon(desp,{color:'#054523',weight:2.5,fillColor:'#0a5c36',fillOpacity:.28,
       className:'alava-drag', interactive:true}).addTo(capaAlava);
   });
