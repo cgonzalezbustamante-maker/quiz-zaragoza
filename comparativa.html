@@ -216,14 +216,22 @@ function renderAlava(){
     html:'<div class="prov-lbl">ÁLAVA</div>',iconSize:null,iconAnchor:[50,0]}),
     interactive:false}).addTo(capaAlava);
 
+  // Overrides de anclaje por parque (para separar etiquetas):
+  //   [x,y] — x mayor mueve la etiqueta a la izquierda del punto;
+  //           y mayor la mueve hacia arriba.
+  const ANCHORS_ALV = {
+    'Espejo':  [100, -8],  // ← 100 px (≈ longitud de la etiqueta) a la izq., misma vertical
+    'Agurain': [0,   32],  // ↑ ~40 px (≈ 2× altura de la etiqueta) hacia arriba, misma horizontal
+  };
   // Parques (círculo + etiqueta)
   ALAVA_PARQUES.forEach(p=>{
     L.circleMarker([p.lat+dLat, p.lon+dLon],{radius:6,color:'#1a1a1a',
       fillColor:'#0a5c36',fillOpacity:1,weight:2, className:'alava-drag',
       interactive:true}).addTo(capaAlava);
+    const anc = ANCHORS_ALV[p.n] || [0,-8];
     L.marker([p.lat+dLat, p.lon+dLon],{icon:L.divIcon({className:'',
       html:'<div class="lbl-parque alv">🚒 '+p.n+' · <b>'+p.por_turno+'</b></div>',
-      iconSize:null,iconAnchor:[0,-8]}),interactive:false,zIndexOffset:1000}).addTo(capaAlava);
+      iconSize:null,iconAnchor:anc}),interactive:false,zIndexOffset:1000}).addTo(capaAlava);
   });
 }
 
