@@ -51,15 +51,18 @@
     <h1>🚒 Comparativa</h1>
     <div class="sub">Provincia de Zaragoza vs. Provincia de Álava · A escala real</div>
     <div class="card zgz">
-      <h2>Zaragoza (DPZ)</h2>
+      <h2>Zaragoza (DPZ) <span style="font-size:11px;font-weight:400;color:#666">(sin capital)</span></h2>
       <table>
-        <tr><td>Superficie</td><td>17.274 km²</td></tr>
-        <tr><td>Población</td><td>966.438 hab</td></tr>
-        <tr><td>Densidad</td><td>56 hab/km²</td></tr>
-        <tr><td>Nº municipios</td><td>293</td></tr>
+        <tr><td>Superficie</td><td>16.211 km²</td></tr>
+        <tr><td>Población</td><td>293.428 hab</td></tr>
+        <tr><td>Densidad</td><td>18 hab/km²</td></tr>
+        <tr><td>Nº municipios</td><td>292</td></tr>
         <tr><td>Nº parques</td><td id="zgz-parques">9</td></tr>
         <tr><td>Bomberos/turno (activos)</td><td id="zgz-boms">–</td></tr>
       </table>
+      <div style="font-size:10px;color:#8a3a3a;margin-top:6px;line-height:1.35">
+        ⚠ Zaragoza capital (1.063 km², 673.010 hab) tiene <b>servicio de bomberos municipal propio</b> — no cubierto por la Diputación Provincial. Recortada del polígono y descontada de los datos.
+      </div>
       <div class="parques-lista" id="zgz-lista"></div>
     </div>
     <div class="card alv">
@@ -120,9 +123,11 @@ let ALAVA_OFF = [0, 0]; // desplazamiento [dLat, dLon] aplicado
 fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   // Zaragoza — un solo polígono en el formato del proyecto:
   // {"limite":[[lat,lon],[lat,lon],...]}
+  // La capital (con servicio de bomberos propio) se recorta como agujero.
   const zgzLim = d.zaragoza.geojson && d.zaragoza.geojson.limite;
+  const capHoles = Array.isArray(d.zaragoza.capital_hole) ? d.zaragoza.capital_hole : [];
   if(Array.isArray(zgzLim) && zgzLim.length>2 && zgzLim[0].length===2){
-    L.polygon(zgzLim,{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
+    L.polygon([zgzLim, ...capHoles],{color:'#7a0e14',weight:2.5,fillColor:'#b31f26',fillOpacity:.28,interactive:false}).addTo(capaProv);
   }
 
   // Etiqueta ZARAGOZA (fija)
@@ -164,8 +169,8 @@ fetch('datos_comparativa.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   renderAlava(); // primera pintura
   setupAlavaDrag();
 
-  // Ratios (Álava sin Vitoria-Gasteiz — servicio de bomberos municipal propio)
-  const supZ=17274, popZ=966438, supA=2760, popA=82364, pqZ=9, pqA=6;
+  // Ratios (ambas sin capital — cada una tiene servicio municipal propio)
+  const supZ=16211, popZ=293428, supA=2760, popA=82364, pqZ=9, pqA=6;
   const km2xParqueZ = (supZ/pqZ).toFixed(0);
   const km2xParqueA = (supA/pqA).toFixed(0);
   const habxBomZ = (popZ/zgzBoms).toFixed(0);
