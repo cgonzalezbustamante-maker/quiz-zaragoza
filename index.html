@@ -65,6 +65,10 @@
     aside.oculto{display:none}
     #app.panel-oculto #map-wrap{height:100vh}
   }
+  .modo-tabs{display:flex;gap:6px;margin-bottom:12px}
+  .modo-tabs button{flex:1;padding:8px 6px;border:2px solid var(--tinta);background:#f4f1ea;color:var(--tinta);font-weight:800;font-size:12px;border-radius:6px;cursor:pointer}
+  .modo-tabs button:hover{background:#eddfc7}
+  .modo-tabs button.on{background:var(--rojo);color:#fff;border-color:var(--rojo)}
   .totales{margin-top:14px;padding:10px;background:#fff5e0;border:1.5px solid var(--oro);border-radius:6px;font-size:12px}
   .totales b{color:var(--rojo)}
   .btn-reset{margin-top:10px;width:100%;padding:8px;background:var(--tinta);color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
@@ -85,6 +89,10 @@
   <aside>
     <h1>🚒 SOSDPZ · Cobertura</h1>
     <div class="sub">Cierra o abre parques ajustando bomberos. Los muns se reasignan al siguiente parque disponible.</div>
+    <div class="modo-tabs">
+      <button id="tab-tiempos" class="on" onclick="setModo('tiempos')">⏱ Tiempos mínimos</button>
+      <button id="tab-isocronas" onclick="setModo('isocronas')">🗺 Isócronas</button>
+    </div>
     <div class="leyenda">
       <span style="background:var(--v)">0–15 min</span>
       <span style="background:var(--a)">15–35 min</span>
@@ -117,6 +125,7 @@ const BOMBEROS_DEFAULT = {
   'Tauste':2, 'Daroca':2, 'Cariñena':2, 'El Burgo de Ebro':2
 };
 let bomberos = {...BOMBEROS_DEFAULT};
+let modo = 'tiempos'; // 'tiempos' o 'isocronas'
 const PARQUE_COLOR = {
   'Zaragoza':'#b31f26',
   'Tarazona':'#8e44ad','Calatayud':'#2980b9','Ejea de los Caballeros':'#16a085',
@@ -213,6 +222,35 @@ function setBom(p, v){
   refrescar();
 }
 function resetear(){ bomberos = {...BOMBEROS_DEFAULT}; refrescar(); }
+function setModo(m){
+  modo = m;
+  document.getElementById('tab-tiempos').classList.toggle('on', m==='tiempos');
+  document.getElementById('tab-isocronas').classList.toggle('on', m==='isocronas');
+  renderLeyendaMapa();
+  refrescar();
+}
+function renderLeyendaMapa(){
+  const cont = document.getElementById('legend-map');
+  if(!cont) return;
+  if(modo==='tiempos'){
+    cont.innerHTML =
+      '<div class="titulo">TIEMPO DE LLEGADA</div>'+
+      '<div class="fila"><span class="caja" style="background:var(--v)"></span>0 – 15 min</div>'+
+      '<div class="fila"><span class="caja" style="background:var(--a)"></span>15 – 35 min</div>'+
+      '<div class="fila"><span class="caja" style="background:var(--n)"></span>35 – 45 min</div>'+
+      '<div class="fila"><span class="caja" style="background:var(--r)"></span>45 – 55 min</div>'+
+      '<div class="fila"><span class="caja" style="background:var(--k)"></span>&gt; 55 min</div>';
+  } else {
+    // Modo Isócronas: leyenda con los parques y sus colores (solo los abiertos)
+    let html = '<div class="titulo">ISÓCRONAS POR PARQUE</div>';
+    Object.keys(DATOS.parques).forEach(p=>{
+      const abierto = (bomberos[p]||0) > 0;
+      const col = PARQUE_COLOR[p] || '#888';
+      html += '<div class="fila" style="'+(abierto?'':'opacity:.35')+'"><span class="caja" style="background:'+col+'"></span>'+p+(abierto?'':' (cerrado)')+'</div>';
+    });
+    cont.innerHTML = html;
+  }
+}
 function togglePanel(){
   const app = document.getElementById('app');
   const aside = document.querySelector('aside');
@@ -227,7 +265,10 @@ function renderMuns(){
   Object.entries(DATOS.muns).forEach(([mun, mv])=>{
     if(!mv.poligonos || !mv.poligonos.length) return;
     const asig = parqueAsignado(mun);
-    const col = asig ? colorTiempo(asig.min) : COL_GRIS;
+    let col;
+    if(!asig) col = COL_GRIS;
+    else if(modo==='isocronas') col = PARQUE_COLOR[asig.parque] || '#888';
+    else col = colorTiempo(asig.min);
     mv.poligonos.forEach(poly=>{
       if(!poly || poly.length<3) return;
       L.polygon(poly,{
@@ -295,7 +336,7 @@ function renderParques(){
   });
 }
 
-function refrescar(){ renderMuns(); renderParques(); renderPanel(); }
+function refrescar(){ renderMuns(); renderParques(); renderPanel(); if(modo==='isocronas') renderLeyendaMapa(); }
 
 // ─── Exportar POSTER (deshabilitado) ──────────────────────────
 async function _generarPoster_deshabilitado_(){
