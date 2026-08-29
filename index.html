@@ -161,9 +161,16 @@
   .foco-popup .p-nom{font-weight:700;color:#111}
   .foco-popup .p-min{text-align:right;font-weight:800;color:#111;font-variant-numeric:tabular-nums}
   .foco-popup .p-est{text-align:center;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:800;white-space:nowrap}
-  .foco-popup .p-est.asig{background:#2ecc71;color:#fff}
+  .foco-popup .p-est.asig{background:#2ecc71;color:#fff}   /* fondo lo sobrescribe estilo inline */
   .foco-popup .p-est.ab{background:#eaeaea;color:#555}
   .foco-popup .p-est.cer{background:#000;color:#ffdd00;border:1px solid #ffdd00}
+  /* Etiqueta del parque que cubre al mun enfocado: borde triple negro-color-negro,
+     con el color del tiempo de llegada del mun en la banda central. Se aplica
+     dinámicamente añadiendo la clase .cubre y la variable --cub-col. */
+  .lbl-parque.cubre{
+    border:3px solid #000 !important;
+    box-shadow: 0 0 0 4px var(--cub-col,#c9a24b), 0 0 0 7px #000, 0 4px 10px #000a !important;
+  }
   .foco-popup tr.asig{background:#e8f5e9}
   .foco-popup tr.cer{background:#fffbe6}
   .foco-popup .cerrar{display:block;text-align:center;padding:5px;background:#f3f3f3;color:#666;font-size:11px;cursor:pointer;border-top:1px solid #ddd;border-radius:0 0 5px 5px;font-weight:700}
@@ -572,10 +579,12 @@ function focoMun(mun){
     if(!pv) return;
     const dest = L.latLng(pv.lat, pv.lon);
     if(f.esAsig){
-      // Línea verde sólida gruesa hacia el parque que cubre actualmente.
-      L.polyline([centro, dest],{color:'#000', weight:6, opacity:0.7, interactive:false}).addTo(capaFoco);
-      L.polyline([centro, dest],{color:'#2ecc71', weight:4, opacity:1, interactive:false}).addTo(capaFoco);
-      L.circleMarker(dest,{radius:14, color:'#000', fillColor:'#2ecc71', fillOpacity:0.35, weight:3, interactive:false}).addTo(capaFoco);
+      // Línea gruesa hacia el parque que cubre: color del tiempo de llegada
+      // (misma paleta de franjas), con halo negro exterior para contraste.
+      const colAsig = asig ? colorTiempo(asig.min) : '#2ecc71';
+      L.polyline([centro, dest],{color:'#000',    weight:7, opacity:0.75, interactive:false}).addTo(capaFoco);
+      L.polyline([centro, dest],{color:colAsig,   weight:4.5, opacity:1,  interactive:false}).addTo(capaFoco);
+      L.circleMarker(dest,{radius:15, color:'#000', fillColor:colAsig, fillOpacity:0.35, weight:3, interactive:false}).addTo(capaFoco);
     } else {
       // f.abierto===false y f.t < tAsig: cerrado que mejoraría el tiempo.
       L.polyline([centro, dest],{color:'#000', weight:5, opacity:0.6, interactive:false, dashArray:'2 6'}).addTo(capaFoco);
@@ -585,10 +594,13 @@ function focoMun(mun){
   });
 
   const colFranja = asig ? colorTiempo(asig.min) : '#95a5a6';
+  // Texto negro sobre franja amarilla (15-35 min); blanco en el resto.
+  const claroCubre = asig && asig.min > 15 && asig.min <= 35;
+  const colCubreTxt = claroCubre ? '#000' : '#fff';
   const filasHtml = filas.map(f=>{
     const cls = f.esAsig ? 'asig' : (f.abierto ? '' : 'cer');
     const est = f.esAsig
-      ? '<span class="p-est asig">✓ CUBRE</span>'
+      ? '<span class="p-est asig" style="background:'+colFranja+';color:'+colCubreTxt+'">✓ CUBRE</span>'
       : (f.abierto ? '<span class="p-est ab">abierto</span>' : '<span class="p-est cer">CERRADO</span>');
     return '<tr class="'+cls+'"><td class="p-nom">'+f.p+'</td><td>'+est+'</td><td class="p-min">'+f.t.toFixed(1)+' min</td></tr>';
   }).join('');
@@ -698,6 +710,20 @@ function focoMun(mun){
   // Activar drag sobre la cabecera del popup: al soltar, la línea de unión
   // se recalcula al nuevo lado más cercano del popup.
   _activarDragPopup();
+  // Resaltar la etiqueta del parque que cubre con borde triple negro-color-negro.
+  // Limpia cualquier resalto anterior antes de aplicar el nuevo.
+  document.querySelectorAll('.lbl-parque.cubre').forEach(el=>{
+    el.classList.remove('cubre'); el.style.removeProperty('--cub-col');
+  });
+  if(asig){
+    document.querySelectorAll('.lbl-parque').forEach(el=>{
+      const nom = el.querySelector('.p-nom');
+      if(nom && nom.textContent.trim() === asig.parque){
+        el.classList.add('cubre');
+        el.style.setProperty('--cub-col', colFranja);
+      }
+    });
+  }
   // Marca el li en el panel
   document.querySelectorAll('.franja li.activo').forEach(el=>el.classList.remove('activo'));
   document.querySelectorAll('.franja li').forEach(el=>{
@@ -715,6 +741,9 @@ function limpiarFoco(){
   capaFoco.clearLayers();
   map.closePopup();
   document.querySelectorAll('.franja li.activo').forEach(el=>el.classList.remove('activo'));
+  document.querySelectorAll('.lbl-parque.cubre').forEach(el=>{
+    el.classList.remove('cubre'); el.style.removeProperty('--cub-col');
+  });
 }
 
 // Redibuja la línea de unión mun↔popup en cada zoom/move: el punto de unión
