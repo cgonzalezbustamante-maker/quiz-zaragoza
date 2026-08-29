@@ -163,6 +163,11 @@
   .foco-popup tr.cer{background:#fffbe6}
   .foco-popup .cerrar{display:block;text-align:center;padding:5px;background:#f3f3f3;color:#666;font-size:11px;cursor:pointer;border-top:1px solid #ddd;border-radius:0 0 5px 5px;font-weight:700}
   .foco-popup .cerrar:hover{background:#e8e8e8;color:#000}
+  /* Perímetro del mun enfocado: rayas hazard animadas ("marching ants"). */
+  .foco-perim-halo{stroke:#000;stroke-width:8;fill:none;opacity:.85}
+  .foco-perim-rayas{stroke:#ffdd00;stroke-width:5;stroke-dasharray:14 10;fill:none;opacity:1;animation:march 1s linear infinite}
+  .foco-perim-interior{stroke:#ffdd00;stroke-width:1.5;fill:#ffdd00;fill-opacity:.18}
+  @keyframes march{to{stroke-dashoffset:-24}}
 </style>
 </head>
 <body>
@@ -510,12 +515,17 @@ function focoMun(mun){
   _munEnfocado = mun;
   capaFoco.clearLayers();
 
-  // 1) Contorno del municipio en dorado grueso, con halo negro exterior.
+  // 1) Contorno del mun: tres capas superpuestas:
+  //    - Relleno amarillo muy tenue para que el interior brille sin ocultar el color de franja.
+  //    - Halo negro grueso continuo (perfila el borde).
+  //    - Rayas amarillas gruesas encima con animación "marching ants" (CSS)
+  //      para que el perímetro se lea como cinta hazard en movimiento.
   let bounds = null;
   (mv.poligonos||[]).forEach(poly=>{
     if(!poly || poly.length<3) return;
-    L.polygon(poly,{color:'#000', weight:6, opacity:0.85, fill:false, interactive:false}).addTo(capaFoco);
-    const p = L.polygon(poly,{color:'#ffdd00', weight:3.5, opacity:1, fill:false, interactive:false}).addTo(capaFoco);
+    L.polygon(poly,{className:'foco-perim-interior', interactive:false}).addTo(capaFoco);
+    L.polygon(poly,{className:'foco-perim-halo',     interactive:false}).addTo(capaFoco);
+    const p = L.polygon(poly,{className:'foco-perim-rayas', interactive:false}).addTo(capaFoco);
     if(!bounds) bounds = p.getBounds(); else bounds.extend(p.getBounds());
   });
   const centro = bounds ? bounds.getCenter() : (mv.centroide ? L.latLng(mv.centroide[0], mv.centroide[1]) : null);
