@@ -246,6 +246,11 @@ const capaLbls = L.layerGroup().addTo(map);
 // popup detallado con todos los parques y tiempos.
 const capaFoco = L.layerGroup().addTo(map);
 let _munEnfocado = null;
+// Estado de la línea de unión popup↔mun para poder redibujarla dinámicamente
+// cuando cambia el zoom o el usuario mueve el mapa (así la línea "vive" pegada
+// al popup y el punto de unión sigue anclado al centro del lado más cercano).
+let _focoCfg = null;   // {centro:LatLng, cfg:{off,ext}, dir:'NE'...}
+let _focoLineaHalo = null, _focoLineaBody = null, _focoPunto = null;
 
 // ─── Utilidades ────────────────────────────────────────────────
 function colorTiempo(min){
@@ -654,12 +659,14 @@ function focoMun(mun){
   // latLng del extremo del popup (centro del lado más cercano al mun)
   const extPt = L.point(cx.x + cfg.ext.x, cx.y + cfg.ext.y);
   const extLL = map.containerPointToLatLng(extPt);
-  // Línea de unión mun ↔ popup en CYAN sólido con halo negro grueso: color
-  // fluorescente que no aparece en ningún otro elemento del mapa (parques,
-  // isócronas, hazard), por lo que la conexión salta a la vista al instante.
-  L.polyline([centro, extLL],{color:'#000',    weight:6, opacity:0.85, interactive:false}).addTo(capaFoco);
-  L.polyline([centro, extLL],{color:'#00e5ff', weight:3.5, opacity:1,  interactive:false}).addTo(capaFoco);
-  L.circleMarker(extLL,{radius:5.5, color:'#000', fillColor:'#00e5ff', fillOpacity:1, weight:2, interactive:false}).addTo(capaFoco);
+  // Línea de unión mun ↔ popup: marrón chocolate con halo dorado exterior.
+  // Se guarda referencia + configuración para redibujar dinámicamente en
+  // eventos zoom/move (así el extremo queda SIEMPRE clavado sobre el centro
+  // del lado del popup más cercano al mun, aunque el usuario haga zoom).
+  _focoCfg = {centro, cfg, dir:dirElegida};
+  _focoLineaHalo = L.polyline([centro, extLL],{color:'#c9a24b', weight:7, opacity:0.95, interactive:false, lineCap:'round'}).addTo(capaFoco);
+  _focoLineaBody = L.polyline([centro, extLL],{color:'#5c3a0e', weight:4, opacity:1,    interactive:false, lineCap:'round'}).addTo(capaFoco);
+  _focoPunto     = L.circleMarker(extLL,{radius:6, color:'#c9a24b', fillColor:'#5c3a0e', fillOpacity:1, weight:2.5, interactive:false}).addTo(capaFoco);
   // Popup con offset diagonal. Anclado por su borde inferior-centro (default).
   L.popup({maxWidth:370, minWidth:230, autoPan:true, closeButton:false, className:'foco-popup-wrap', offset:cfg.off})
     .setLatLng(centro).setContent(html).openOn(map);
@@ -672,10 +679,26 @@ function focoMun(mun){
 
 function limpiarFoco(){
   _munEnfocado = null;
+  _focoCfg = null;
+  _focoLineaHalo = _focoLineaBody = _focoPunto = null;
   capaFoco.clearLayers();
   map.closePopup();
   document.querySelectorAll('.franja li.activo').forEach(el=>el.classList.remove('activo'));
 }
+
+// Redibuja la línea de unión mun↔popup en cada zoom/move: el punto de unión
+// se recalcula en píxeles con el offset guardado, así queda anclado sobre el
+// centro del lado del popup más cercano al mun independientemente del zoom.
+function _actualizarLineaFoco(){
+  if(!_focoCfg || !_focoLineaHalo) return;
+  const cx = map.latLngToContainerPoint(_focoCfg.centro);
+  const extPt = L.point(cx.x + _focoCfg.cfg.ext.x, cx.y + _focoCfg.cfg.ext.y);
+  const extLL = map.containerPointToLatLng(extPt);
+  _focoLineaHalo.setLatLngs([_focoCfg.centro, extLL]);
+  _focoLineaBody.setLatLngs([_focoCfg.centro, extLL]);
+  _focoPunto.setLatLng(extLL);
+}
+map.on('zoomend moveend zoom', _actualizarLineaFoco);
 
 // ─── Exportar POSTER (deshabilitado) ──────────────────────────
 async function _generarPoster_deshabilitado_(){
