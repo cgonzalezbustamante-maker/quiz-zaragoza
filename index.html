@@ -147,7 +147,9 @@
   .franja li.activo{background:#ffdd00 !important;box-shadow:inset 3px 0 0 #000}
   /* Popup del municipio enfocado */
   .foco-popup{font-family:'Segoe UI',Arial,sans-serif;min-width:230px}
-  .foco-popup .cab{padding:7px 11px;border-radius:5px 5px 0 0;color:#fff;text-align:center;text-shadow:0 1px 2px #0007}
+  .foco-popup .cab{padding:7px 11px;border-radius:5px 5px 0 0;color:#fff;text-align:center;text-shadow:0 1px 2px #0007;cursor:move;user-select:none}
+  .foco-popup .cab:active{cursor:grabbing}
+  .foco-popup .cab::before{content:'⋮⋮ ';opacity:.7;letter-spacing:-2px;font-weight:900;margin-right:3px}
   /* Cabecera sobre fondo amarillo (franja 15-35 min): texto negro, sin sombra,
      para que se lea con contraste correcto. */
   .foco-popup .cab.claro{color:#000;text-shadow:none}
@@ -249,8 +251,10 @@ let _munEnfocado = null;
 // Estado de la línea de unión popup↔mun para poder redibujarla dinámicamente
 // cuando cambia el zoom o el usuario mueve el mapa (así la línea "vive" pegada
 // al popup y el punto de unión sigue anclado al centro del lado más cercano).
-let _focoCfg = null;   // {centro:LatLng, cfg:{off,ext}, dir:'NE'...}
+let _focoCfg = null;   // {centro:LatLng, cfg:{off,popW,popH}}
 let _focoLineaHalo = null, _focoLineaBody = null, _focoPunto = null;
+let _focoPopup = null;
+let _focoDrag = null;  // {startOffX, startOffY, startX, startY} durante arrastre
 
 // ─── Utilidades ────────────────────────────────────────────────
 function colorTiempo(min){
@@ -689,8 +693,11 @@ function focoMun(mun){
   _focoLineaBody = L.polyline([centro, extLL],{color:'#5c3a0e', weight:4, opacity:1,    interactive:false, lineCap:'round'}).addTo(capaFoco);
   _focoPunto     = L.circleMarker(extLL,{radius:6, color:'#c9a24b', fillColor:'#5c3a0e', fillOpacity:1, weight:2.5, interactive:false}).addTo(capaFoco);
   // Popup con offset. Anclado por su borde inferior-centro (default).
-  L.popup({maxWidth:370, minWidth:230, autoPan:true, closeButton:false, className:'foco-popup-wrap', offset:cfg.off})
+  _focoPopup = L.popup({maxWidth:370, minWidth:230, autoPan:false, closeButton:false, className:'foco-popup-wrap', offset:cfg.off})
     .setLatLng(centro).setContent(html).openOn(map);
+  // Activar drag sobre la cabecera del popup: al soltar, la línea de unión
+  // se recalcula al nuevo lado más cercano del popup.
+  _activarDragPopup();
   // Marca el li en el panel
   document.querySelectorAll('.franja li.activo').forEach(el=>el.classList.remove('activo'));
   document.querySelectorAll('.franja li').forEach(el=>{
@@ -702,6 +709,9 @@ function limpiarFoco(){
   _munEnfocado = null;
   _focoCfg = null;
   _focoLineaHalo = _focoLineaBody = _focoPunto = null;
+  _focoPopup = null;
+  _focoDrag = null;
+  if(map.dragging && !map.dragging.enabled()) map.dragging.enable();
   capaFoco.clearLayers();
   map.closePopup();
   document.querySelectorAll('.franja li.activo').forEach(el=>el.classList.remove('activo'));
@@ -714,12 +724,15 @@ function _actualizarLineaFoco(){
   if(!_focoCfg || !_focoLineaHalo) return;
   const cfg = _focoCfg.cfg;
   const cxPt = map.latLngToContainerPoint(_focoCfg.centro);
-  // Recalcular el centro geométrico del popup en píxeles según el zoom actual
-  // y determinar el centro del lado del popup más cercano al mun (eje dominante).
+  // Centro geométrico del popup en píxeles (según offset actual y zoom).
   const cpx = cxPt.x + cfg.off.x;
   const cpy = cxPt.y + cfg.off.y - cfg.popH/2;
+  // Vector desde el centro del popup hacia el mun (dinámico: depende de la
+  // posición actual del popup, no de un dirBack precalculado). Al arrastrar
+  // el popup, el vector cambia y con él el "lado más cercano" al mun.
+  const dx = cxPt.x - cpx;
+  const dy = cxPt.y - cpy;
   const halfW = cfg.popW/2, halfH = cfg.popH/2;
-  const {x:dx, y:dy} = cfg.dirBack;
   let sx, sy;
   if(Math.abs(dx) * halfH > Math.abs(dy) * halfW){
     sx = cpx + Math.sign(dx) * halfW; sy = cpy;
@@ -732,6 +745,66 @@ function _actualizarLineaFoco(){
   _focoPunto.setLatLng(extLL);
 }
 map.on('zoomend moveend zoom', _actualizarLineaFoco);
+
+// Convierte la cabecera del popup en asa de arrastre: al mousedown captura
+// posición inicial, al mousemove global desplaza el offset del popup y llama
+// a _actualizarLineaFoco (que recalcula el lado más cercano); al mouseup libera.
+function _activarDragPopup(){
+  if(!_focoPopup || !_focoCfg) return;
+  const cont = _focoPopup.getElement();
+  if(!cont) return;
+  const cab = cont.querySelector('.foco-popup .cab');
+  if(!cab) return;
+  cab.addEventListener('mousedown', ev=>{
+    ev.preventDefault(); ev.stopPropagation();
+    map.dragging.disable();
+    _focoDrag = {
+      startX: ev.clientX,
+      startY: ev.clientY,
+      startOffX: _focoCfg.cfg.off.x,
+      startOffY: _focoCfg.cfg.off.y,
+    };
+  });
+  cab.addEventListener('touchstart', ev=>{
+    if(!ev.touches.length) return;
+    ev.preventDefault(); ev.stopPropagation();
+    map.dragging.disable();
+    const t = ev.touches[0];
+    _focoDrag = {
+      startX: t.clientX,
+      startY: t.clientY,
+      startOffX: _focoCfg.cfg.off.x,
+      startOffY: _focoCfg.cfg.off.y,
+    };
+  }, {passive:false});
+}
+document.addEventListener('mousemove', ev=>{
+  if(!_focoDrag || !_focoCfg || !_focoPopup) return;
+  const dx = ev.clientX - _focoDrag.startX;
+  const dy = ev.clientY - _focoDrag.startY;
+  _focoCfg.cfg.off = L.point(_focoDrag.startOffX + dx, _focoDrag.startOffY + dy);
+  _focoPopup.options.offset = _focoCfg.cfg.off;
+  _focoPopup.update();
+  _actualizarLineaFoco();
+});
+document.addEventListener('touchmove', ev=>{
+  if(!_focoDrag || !_focoCfg || !_focoPopup || !ev.touches.length) return;
+  const t = ev.touches[0];
+  const dx = t.clientX - _focoDrag.startX;
+  const dy = t.clientY - _focoDrag.startY;
+  _focoCfg.cfg.off = L.point(_focoDrag.startOffX + dx, _focoDrag.startOffY + dy);
+  _focoPopup.options.offset = _focoCfg.cfg.off;
+  _focoPopup.update();
+  _actualizarLineaFoco();
+}, {passive:false});
+function _endDragFoco(){
+  if(!_focoDrag) return;
+  _focoDrag = null;
+  map.dragging.enable();
+}
+document.addEventListener('mouseup', _endDragFoco);
+document.addEventListener('touchend', _endDragFoco);
+document.addEventListener('touchcancel', _endDragFoco);
 
 // ─── Exportar POSTER (deshabilitado) ──────────────────────────
 async function _generarPoster_deshabilitado_(){
