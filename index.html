@@ -611,63 +611,84 @@ function focoMun(mun){
     map.fitBounds(L.latLngBounds(puntosMapa).pad(0.35), {maxZoom:11, animate:false});
   }
 
-  // 6) Posicionar el popup en una de las 4 diagonales evitando colisionar
-  //    con cualquier parque de la lista. El popup se ancla por su borde
-  //    inferior-central: la LÍNEA de unión saldrá exactamente del centro
-  //    del lado del popup más cercano al mun.
-  //    - NE/NW → popup ARRIBA del mun → línea sale del centro del lado inferior.
-  //    - SE/SW → popup DEBAJO del mun → línea sale del centro del lado superior
-  //      (para eso el popup se ancla en el borde SUPERIOR — se ajusta el offset).
+  // 6) Colocar el popup en el ÁNGULO MÁS GRANDE formado entre las líneas
+  //    mun→parque (para no cruzarse jamás con ninguna). Si hay N parques,
+  //    dividen el círculo en N sectores; se elige el bisector del sector
+  //    mayor. Si hay 1 parque, se coloca en el sentido opuesto (sector 360°).
   const popW = 260;
   const popH = 55 + filas.length*32 + 32;  // cab + filas + cerrar (estimación)
-  const OFFPX = 90;  // desplazamiento diagonal desde el centro del mun
-  const OFFY = 60;
-  // Configuración por dirección: offset del popup (referido a su ancla nativa
-  // = borde inferior-centro) y punto de origen de la línea (extremo del popup).
-  const dirCfg = {
-    'NE': {off:L.point(+OFFPX, -OFFY),                  // popup arriba-derecha
-           ext:L.point(+OFFPX, -OFFY)},                 // ancla = borde inferior del popup
-    'NW': {off:L.point(-OFFPX, -OFFY),
-           ext:L.point(-OFFPX, -OFFY)},
-    'SE': {off:L.point(+OFFPX, +OFFY + popH),           // popup abajo-derecha
-           ext:L.point(+OFFPX, +OFFY)},                 // línea sale del borde SUPERIOR
-    'SW': {off:L.point(-OFFPX, +OFFY + popH),
-           ext:L.point(-OFFPX, +OFFY)},
+  const OFF_RADIUS = 130;                  // distancia centro-popup ↔ centro-mun (px)
+  const cxPt = map.latLngToContainerPoint(centro);
+  // Bearings (radianes) de cada parque desde el mun, en coordenadas de pantalla
+  // (y crece hacia abajo; atan2 devuelve entre -π y +π).
+  const bearings = filas.map(f=>{
+    const pv = DATOS.parques[f.p]; if(!pv) return null;
+    const pp = map.latLngToContainerPoint([pv.lat, pv.lon]);
+    return Math.atan2(pp.y - cxPt.y, pp.x - cxPt.x);
+  }).filter(b=>b!==null).sort((a,b)=>a-b);
+  let bestMid;
+  if(bearings.length === 1){
+    // Popup en dirección opuesta al único parque
+    bestMid = bearings[0] + Math.PI;
+  } else {
+    let bestGap = 0;
+    for(let i=0; i<bearings.length; i++){
+      const cur = bearings[i];
+      const nxt = bearings[(i+1) % bearings.length];
+      let gap = nxt - cur;
+      if(i === bearings.length-1) gap += 2*Math.PI; // wrap-around
+      if(gap > bestGap){
+        bestGap = gap;
+        bestMid = cur + gap/2;
+      }
+    }
+  }
+  // Normalizar a [-π, π]
+  while(bestMid >  Math.PI) bestMid -= 2*Math.PI;
+  while(bestMid < -Math.PI) bestMid += 2*Math.PI;
+  const dirVec = {x: Math.cos(bestMid), y: Math.sin(bestMid)};
+  const offX = dirVec.x * OFF_RADIUS;
+  const offY = dirVec.y * OFF_RADIUS;
+  // Ancla del popup = latLng+offset (Leaflet). Con ancla default (bottom-center)
+  // el popup se despliega hacia arriba; para centrarlo en (offX, offY) hay que
+  // desplazar el ancla popH/2 hacia abajo desde el centro geométrico deseado.
+  const cfg = {
+    off: L.point(offX, offY + popH/2),
+    // Vector desde el CENTRO del popup hacia el mun (para calcular el punto
+    // de unión en el centro del lado más cercano).
+    dirBack: {x:-dirVec.x, y:-dirVec.y},
+    popW, popH,
   };
-  const cx = map.latLngToContainerPoint(centro);
-  // bbox del popup en píxeles según dirección
-  function bboxPopup(dir){
-    const c = dirCfg[dir];
-    // Ancla del popup = cx + off. Popup se despliega hacia arriba desde el ancla.
-    const ax = cx.x + c.off.x, ay = cx.y + c.off.y;
-    return {
-      minX: ax - popW/2 - 6, maxX: ax + popW/2 + 6,
-      minY: ay - popH   - 6, maxY: ay          + 6,
-    };
+  // Punto de unión: centro del LADO del popup más cercano al mun, calculado
+  // según el eje dominante del vector popup→mun.
+  function calcExt(cfg, cxPt){
+    const cpx = cxPt.x + cfg.off.x;
+    const cpy = cxPt.y + cfg.off.y - cfg.popH/2; // centro geométrico del popup
+    const halfW = cfg.popW/2, halfH = cfg.popH/2;
+    const {x:dx, y:dy} = cfg.dirBack;
+    let sx, sy;
+    if(Math.abs(dx) * halfH > Math.abs(dy) * halfW){
+      // vector predominantemente horizontal → lado vertical más cercano
+      sx = cpx + Math.sign(dx) * halfW;
+      sy = cpy;
+    } else {
+      // vector predominantemente vertical → lado horizontal más cercano
+      sx = cpx;
+      sy = cpy + Math.sign(dy) * halfH;
+    }
+    return L.point(sx, sy);
   }
-  function colisiona(dir){
-    const bb = bboxPopup(dir);
-    return filas.some(f=>{
-      const pv = DATOS.parques[f.p]; if(!pv) return false;
-      const pp = map.latLngToContainerPoint([pv.lat, pv.lon]);
-      return pp.x >= bb.minX && pp.x <= bb.maxX && pp.y >= bb.minY && pp.y <= bb.maxY;
-    });
-  }
-  const dirsOrden = ['NE','NW','SE','SW'];
-  let dirElegida = dirsOrden.find(d => !colisiona(d)) || 'NE';
-  const cfg = dirCfg[dirElegida];
-  // latLng del extremo del popup (centro del lado más cercano al mun)
-  const extPt = L.point(cx.x + cfg.ext.x, cx.y + cfg.ext.y);
+  const extPt = calcExt(cfg, cxPt);
   const extLL = map.containerPointToLatLng(extPt);
   // Línea de unión mun ↔ popup: marrón chocolate con halo dorado exterior.
   // Se guarda referencia + configuración para redibujar dinámicamente en
   // eventos zoom/move (así el extremo queda SIEMPRE clavado sobre el centro
   // del lado del popup más cercano al mun, aunque el usuario haga zoom).
-  _focoCfg = {centro, cfg, dir:dirElegida};
+  _focoCfg = {centro, cfg};
   _focoLineaHalo = L.polyline([centro, extLL],{color:'#c9a24b', weight:7, opacity:0.95, interactive:false, lineCap:'round'}).addTo(capaFoco);
   _focoLineaBody = L.polyline([centro, extLL],{color:'#5c3a0e', weight:4, opacity:1,    interactive:false, lineCap:'round'}).addTo(capaFoco);
   _focoPunto     = L.circleMarker(extLL,{radius:6, color:'#c9a24b', fillColor:'#5c3a0e', fillOpacity:1, weight:2.5, interactive:false}).addTo(capaFoco);
-  // Popup con offset diagonal. Anclado por su borde inferior-centro (default).
+  // Popup con offset. Anclado por su borde inferior-centro (default).
   L.popup({maxWidth:370, minWidth:230, autoPan:true, closeButton:false, className:'foco-popup-wrap', offset:cfg.off})
     .setLatLng(centro).setContent(html).openOn(map);
   // Marca el li en el panel
@@ -691,9 +712,21 @@ function limpiarFoco(){
 // centro del lado del popup más cercano al mun independientemente del zoom.
 function _actualizarLineaFoco(){
   if(!_focoCfg || !_focoLineaHalo) return;
-  const cx = map.latLngToContainerPoint(_focoCfg.centro);
-  const extPt = L.point(cx.x + _focoCfg.cfg.ext.x, cx.y + _focoCfg.cfg.ext.y);
-  const extLL = map.containerPointToLatLng(extPt);
+  const cfg = _focoCfg.cfg;
+  const cxPt = map.latLngToContainerPoint(_focoCfg.centro);
+  // Recalcular el centro geométrico del popup en píxeles según el zoom actual
+  // y determinar el centro del lado del popup más cercano al mun (eje dominante).
+  const cpx = cxPt.x + cfg.off.x;
+  const cpy = cxPt.y + cfg.off.y - cfg.popH/2;
+  const halfW = cfg.popW/2, halfH = cfg.popH/2;
+  const {x:dx, y:dy} = cfg.dirBack;
+  let sx, sy;
+  if(Math.abs(dx) * halfH > Math.abs(dy) * halfW){
+    sx = cpx + Math.sign(dx) * halfW; sy = cpy;
+  } else {
+    sx = cpx;                         sy = cpy + Math.sign(dy) * halfH;
+  }
+  const extLL = map.containerPointToLatLng(L.point(sx, sy));
   _focoLineaHalo.setLatLngs([_focoCfg.centro, extLL]);
   _focoLineaBody.setLatLngs([_focoCfg.centro, extLL]);
   _focoPunto.setLatLng(extLL);
