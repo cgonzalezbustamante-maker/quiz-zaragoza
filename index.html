@@ -20,7 +20,19 @@
   .leyenda{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding:8px;background:#f9f5ea;border-radius:6px;border:1px solid #d7cba5}
   .leyenda span{font-size:10px;padding:2px 6px;border-radius:3px;color:#111;font-weight:700}
   .parque{background:var(--pane);border:1.5px solid #ddd;border-radius:8px;padding:10px 11px;margin-bottom:9px;box-shadow:0 1px 3px #0001}
-  .parque.cerrado{opacity:.55;border-style:dashed}
+  /* Chip de parque cerrado: banda hazard amarillo/negro en el borde
+     izquierdo y borde negro grueso, para que salte a la vista al hojear
+     el panel lateral y localizar rápido qué parques están sin dotación. */
+  .parque.cerrado{
+    border:2px solid #ffdd00;
+    border-left:14px solid transparent;
+    border-image: repeating-linear-gradient(135deg,#ffdd00 0 8px,#000 8px 14px) 14;
+    background:#000;
+    box-shadow:0 0 0 2px #000, 0 2px 5px #0004;
+  }
+  .parque.cerrado .parque-nom{color:#ffdd00}
+  .parque.cerrado .stats{color:#ffdd00;font-weight:700}
+  .parque.cerrado .bom-ctrl input{background:#ffdd00;color:#000;border-color:#ffdd00}
   .parque-cab{display:flex;align-items:center;gap:8px;margin-bottom:6px}
   .parque-cab .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
   .parque-nom{font-weight:800;font-size:14px;flex:1}
@@ -81,8 +93,55 @@
   .lbl-parque .p-boms{font-size:16px;letter-spacing:1px;margin:1px 0}
   .lbl-parque .p-stat{font-size:11px;color:#111;text-shadow:0 0 3px #fff;font-weight:700}
   .lbl-parque .p-stat b{color:var(--tinta);font-weight:900}
-  .lbl-parque.cerrado{background:rgba(255,220,220,.72);border-color:rgba(178,31,38,.9)}
+  /* Parque cerrado: estilo cinta de precaución (hazard) — máxima visibilidad.
+     Fondo amarillo con rayas negras diagonales + borde negro grueso.
+     El nombre del parque va en negro sobre banda amarilla, y la palabra
+     CERRADO en negro sobre fondo amarillo puro con letter-spacing amplio. */
+  .lbl-parque.cerrado{
+    background: repeating-linear-gradient(135deg,
+      #ffdd00 0px, #ffdd00 10px,
+      #000 10px, #000 16px);
+    border:3px solid #ffdd00;
+    box-shadow:0 0 0 2px #000, 0 3px 8px #000a;
+    padding:0;
+    overflow:hidden;
+    border-radius:4px;
+  }
+  .lbl-parque.cerrado .p-nom{
+    background:#000;
+    color:#ffdd00;
+    text-shadow:none;
+    padding:2px 8px;
+    display:block;
+    border-bottom:2px solid #ffdd00;
+  }
+  .lbl-parque.cerrado .p-boms{
+    background:#000;
+    color:#ffdd00 !important;
+    font-weight:900;
+    font-size:14px;
+    letter-spacing:3px;
+    padding:3px 8px;
+    display:block;
+  }
   .lbl-mun-name{background:transparent;border:none;color:#333;font-size:9px;font-weight:600;text-shadow:1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;pointer-events:none}
+  /* Panel "Municipios peor cubiertos" — TOP 10 por franja de tiempo, ordenados por población. */
+  #peor-cubiertos{margin-top:14px;border-top:2px solid var(--tinta);padding-top:10px}
+  #peor-cubiertos h2{font-size:13px;margin:0 0 8px;color:var(--rojo);letter-spacing:.02em}
+  .franja{margin-bottom:10px;border-radius:6px;overflow:hidden;border:1.5px solid #ccc}
+  .franja-cab{padding:4px 8px;font-size:11px;font-weight:800;color:#fff;display:flex;justify-content:space-between;align-items:center}
+  .franja-cab .n-muns{background:rgba(255,255,255,.25);padding:1px 6px;border-radius:9px;font-size:10px}
+  .franja-cab.k{background:var(--k)}
+  .franja-cab.r{background:var(--r)}
+  .franja-cab.n{background:var(--n)}
+  .franja-cab.g{background:var(--g)}
+  .franja ul{list-style:none;margin:0;padding:2px 0;background:#fff}
+  .franja li{display:flex;justify-content:space-between;align-items:center;padding:2px 8px;font-size:10.5px;line-height:1.35;border-bottom:1px solid #f0eadc}
+  .franja li:last-child{border-bottom:none}
+  .franja li .nom{font-weight:700;color:#111}
+  .franja li .pob{color:#666;font-size:9.5px;margin-left:6px;white-space:nowrap}
+  .franja li .t{background:#eee;padding:1px 5px;border-radius:3px;font-weight:800;font-size:10px;color:#111;margin-left:6px;white-space:nowrap}
+  .franja .vacio{padding:4px 8px;font-size:10px;color:#999;font-style:italic;text-align:center}
 </style>
 </head>
 <body>
@@ -105,6 +164,7 @@
     </div>
     <div id="parques-lista"></div>
     <div class="totales" id="totales"></div>
+    <div id="peor-cubiertos"></div>
     <button class="btn-reset" onclick="resetear()">Restablecer valores por defecto</button>
   </aside>
   <div id="map-wrap">
@@ -299,16 +359,22 @@ function renderParques(){
       const asig = parqueAsignado(mun);
       if(asig && asig.parque===p){ numMuns++; sup+=mv.sup_km2; pob+=mv.pob; }
     });
-    // Icono círculo del parque
+    // Icono círculo del parque. Cerrado = hazard amarillo con borde negro
+    // más grueso y radio mayor (para destacar sobre el mapa que ese parque
+    // no atiende cobertura).
     L.circleMarker([pv.lat, pv.lon],{
-      radius:cerrado?7:10, color:'#1a1a1a', fillColor:cerrado?'#888':col, fillOpacity:1, weight:2.5
+      radius:cerrado?12:10,
+      color:cerrado?'#ffdd00':'#1a1a1a',
+      fillColor:cerrado?'#000':col,
+      fillOpacity:1,
+      weight:cerrado?4:2.5
     }).addTo(capaParques);
     // Etiqueta flotante semitransparente: si cerrado, sólo nombre + sello CERRADO
     // (no se muestran muns/km²/hab porque no atiende cobertura).
     let cuerpo;
     if(cerrado){
       cuerpo = '<div class="p-nom">'+p+'</div>'+
-               '<div class="p-boms" style="color:#c0392b;font-weight:900">CERRADO</div>';
+               '<div class="p-boms">CERRADO</div>';
     } else {
       cuerpo = '<div class="p-nom">'+p+'</div>'+
                '<div class="p-boms">'+'🧑‍🚒'.repeat(Math.min(n,10))+'</div>'+
@@ -338,7 +404,67 @@ function renderParques(){
   });
 }
 
-function refrescar(){ renderMuns(); renderParques(); renderPanel(); if(modo==='isocronas') renderLeyendaMapa(); }
+function refrescar(){ renderMuns(); renderParques(); renderPanel(); renderPeorCubiertos(); if(modo==='isocronas') renderLeyendaMapa(); }
+
+// Panel "Municipios peor cubiertos" — TOP 10 por franja de tiempo, ordenados
+// por población descendente dentro de cada franja. Sirve para identificar
+// rápidamente qué núcleos poblados están peor atendidos según la configuración
+// actual de dotaciones (útil al cerrar/abrir parques).
+function renderPeorCubiertos(){
+  const cont = document.getElementById('peor-cubiertos');
+  if(!cont) return;
+  const franjas = [
+    {k:'k', min:55, max:Infinity, label:'> 55 min'},
+    {k:'r', min:45, max:55,        label:'45 – 55 min'},
+    {k:'n', min:35, max:45,        label:'35 – 45 min'},
+  ];
+  // Clasificar cada mun en su franja según tiempo del parque asignado.
+  // Los "sin cobertura" (sin parque abierto que llegue) se agrupan aparte.
+  const buckets = franjas.map(f=>({...f, muns:[]}));
+  const sinCob = [];
+  Object.entries(DATOS.muns).forEach(([mun, mv])=>{
+    const asig = parqueAsignado(mun);
+    if(!asig){ sinCob.push({mun, pob:mv.pob, sup:mv.sup_km2}); return; }
+    for(const b of buckets){
+      // (min, max] para no solaparse: >35 y ≤45 en franja "n", etc.
+      // Para la franja >55 usamos > estrictamente.
+      if(b.max===Infinity && asig.min>b.min){
+        b.muns.push({mun, pob:mv.pob, min:asig.min, parque:asig.parque}); break;
+      }
+      if(b.max!==Infinity && asig.min>b.min && asig.min<=b.max){
+        b.muns.push({mun, pob:mv.pob, min:asig.min, parque:asig.parque}); break;
+      }
+    }
+  });
+  let html = '<h2>🚨 Municipios peor cubiertos (TOP 10 por población)</h2>';
+  // Franja "sin cobertura" primero si hay muns cuando algún parque está cerrado.
+  if(sinCob.length){
+    sinCob.sort((a,b)=>b.pob-a.pob);
+    const top = sinCob.slice(0,10);
+    html += '<div class="franja">'+
+      '<div class="franja-cab g">Sin cobertura <span class="n-muns">'+sinCob.length+' mun · '+sinCob.reduce((s,x)=>s+x.pob,0).toLocaleString('es-ES')+' hab</span></div>'+
+      '<ul>'+top.map(x=>'<li><span class="nom">'+x.mun+'</span><span class="pob">'+x.pob.toLocaleString('es-ES')+' hab</span></li>').join('')+'</ul>'+
+      '</div>';
+  }
+  buckets.forEach(b=>{
+    b.muns.sort((a,b)=>b.pob-a.pob);
+    const top = b.muns.slice(0,10);
+    const totalPob = b.muns.reduce((s,x)=>s+x.pob,0);
+    html += '<div class="franja">'+
+      '<div class="franja-cab '+b.k+'">'+b.label+' <span class="n-muns">'+b.muns.length+' mun · '+totalPob.toLocaleString('es-ES')+' hab</span></div>';
+    if(top.length){
+      html += '<ul>'+top.map(x=>
+        '<li><span class="nom">'+x.mun+'</span>'+
+        '<span class="pob">'+x.pob.toLocaleString('es-ES')+' hab</span>'+
+        '<span class="t">'+Math.round(x.min)+' min</span></li>'
+      ).join('')+'</ul>';
+    } else {
+      html += '<div class="vacio">— ninguno —</div>';
+    }
+    html += '</div>';
+  });
+  cont.innerHTML = html;
+}
 
 // ─── Exportar POSTER (deshabilitado) ──────────────────────────
 async function _generarPoster_deshabilitado_(){
