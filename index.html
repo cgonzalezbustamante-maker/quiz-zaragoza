@@ -567,7 +567,30 @@ function focoMun(mun){
     }
   });
 
-  // 4) Popup detallado en el centro del municipio.
+  // 4) Popup detallado, DESPLAZADO respecto al centro del mun para no tapar
+  //    los trazados a los parques. Dirección del desplazamiento: opuesta al
+  //    centroide de los parques mostrados (así el popup queda en el lado
+  //    "libre" del mapa). Se une con una línea hazard al mun.
+  const parquesPts = filas.map(f=>{
+    const pv = DATOS.parques[f.p]; return pv ? [pv.lat, pv.lon] : null;
+  }).filter(Boolean);
+  let popupLatLng = centro;
+  if(parquesPts.length){
+    const cLatP = parquesPts.reduce((s,p)=>s+p[0],0)/parquesPts.length;
+    const cLonP = parquesPts.reduce((s,p)=>s+p[1],0)/parquesPts.length;
+    let dLat = centro.lat - cLatP;
+    let dLon = centro.lng - cLonP;
+    const norm = Math.hypot(dLat, dLon) || 1;
+    const OFF = 0.14; // ~15 km
+    popupLatLng = L.latLng(centro.lat + (dLat/norm)*OFF, centro.lng + (dLon/norm)*OFF);
+  } else {
+    popupLatLng = L.latLng(centro.lat + 0.14, centro.lng);
+  }
+  // Línea hazard uniendo el mun con el popup (halo negro + rayas amarillas).
+  L.polyline([centro, popupLatLng],{color:'#000', weight:5, opacity:0.75, interactive:false}).addTo(capaFoco);
+  L.polyline([centro, popupLatLng],{color:'#ffdd00', weight:3, opacity:1, interactive:false, dashArray:'6 4'}).addTo(capaFoco);
+  // Puntito hazard en el extremo del popup.
+  L.circleMarker(popupLatLng,{radius:5, color:'#000', fillColor:'#ffdd00', fillOpacity:1, weight:2, interactive:false}).addTo(capaFoco);
   const colFranja = asig ? colorTiempo(asig.min) : '#95a5a6';
   const filasHtml = filas.map(f=>{
     const cls = f.esAsig ? 'asig' : (f.abierto ? '' : 'cer');
@@ -587,15 +610,13 @@ function focoMun(mun){
       '<div class="cerrar" onclick="limpiarFoco()">× cerrar</div>'+
     '</div>';
   L.popup({maxWidth:370, minWidth:230, autoPan:true, closeButton:false, className:'foco-popup-wrap'})
-    .setLatLng(centro).setContent(html).openOn(map);
+    .setLatLng(popupLatLng).setContent(html).openOn(map);
 
-  // 5) Encuadrar para ver mun + parques relacionados.
-  const puntos = [centro];
+  // 5) Encuadrar para ver mun + parques relacionados + posición del popup.
+  const puntos = [centro, popupLatLng];
   filas.forEach(f=>{
-    if(f.esAsig || !f.abierto){
-      const pv = DATOS.parques[f.p];
-      if(pv) puntos.push([pv.lat, pv.lon]);
-    }
+    const pv = DATOS.parques[f.p];
+    if(pv) puntos.push([pv.lat, pv.lon]);
   });
   if(puntos.length>1){
     map.fitBounds(L.latLngBounds(puntos).pad(0.25), {maxZoom:11, animate:true});
