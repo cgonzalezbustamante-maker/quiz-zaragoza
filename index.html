@@ -88,10 +88,10 @@
   .btn-reset{margin-top:10px;width:100%;padding:8px;background:var(--tinta);color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
   .btn-reset:hover{background:var(--rojo)}
   /* Etiquetas de parque en mapa */
-  .lbl-parque{background:rgba(255,255,255,.72);backdrop-filter:blur(2px);border:2px solid rgba(26,26,26,.9);border-radius:6px;padding:4px 7px;font-size:11px;font-weight:700;box-shadow:0 2px 5px #0004;text-align:center;line-height:1.25;white-space:nowrap;pointer-events:none}
-  .lbl-parque .p-nom{font-size:13px;color:var(--rojo);text-shadow:0 0 3px #fff;font-weight:900}
-  .lbl-parque .p-boms{font-size:16px;letter-spacing:1px;margin:1px 0}
-  .lbl-parque .p-stat{font-size:11px;color:#111;text-shadow:0 0 3px #fff;font-weight:700}
+  .lbl-parque{background:rgba(255,255,255,.72);backdrop-filter:blur(2px);border:2px solid rgba(26,26,26,.9);border-radius:6px;padding:2px 5px;font-size:11px;font-weight:700;box-shadow:0 2px 5px #0004;text-align:center;line-height:1.15;white-space:nowrap;pointer-events:none}
+  .lbl-parque .p-nom{font-size:14.5px;color:var(--rojo);text-shadow:0 0 3px #fff;font-weight:900}
+  .lbl-parque .p-boms{font-size:17px;letter-spacing:1px;margin:0}
+  .lbl-parque .p-stat{font-size:12.5px;color:#111;text-shadow:0 0 3px #fff;font-weight:700}
   .lbl-parque .p-stat b{color:var(--tinta);font-weight:900}
   /* Parque cerrado: estilo cinta de precaución (hazard) — máxima visibilidad.
      Fondo amarillo con rayas negras diagonales + borde negro grueso.
@@ -148,6 +148,9 @@
   /* Popup del municipio enfocado */
   .foco-popup{font-family:'Segoe UI',Arial,sans-serif;min-width:230px}
   .foco-popup .cab{padding:7px 11px;border-radius:5px 5px 0 0;color:#fff;text-align:center;text-shadow:0 1px 2px #0007}
+  /* Cabecera sobre fondo amarillo (franja 15-35 min): texto negro, sin sombra,
+     para que se lea con contraste correcto. */
+  .foco-popup .cab.claro{color:#000;text-shadow:none}
   .foco-popup .cab .n{font-size:14.5px;font-weight:900;letter-spacing:.02em}
   .foco-popup .cab .p{font-size:11.5px;opacity:.95;margin-top:3px}
   .foco-popup table{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
@@ -581,9 +584,11 @@ function focoMun(mun){
     return '<tr class="'+cls+'"><td class="p-nom">'+f.p+'</td><td>'+est+'</td><td class="p-min">'+f.t.toFixed(1)+' min</td></tr>';
   }).join('');
   const tiempoTxt = asig ? asig.min.toFixed(1)+' min → '+asig.parque : 'SIN COBERTURA';
+  // Fondo amarillo (franja 15-35 min) → texto negro para contraste.
+  const claro = asig && asig.min > 15 && asig.min <= 35;
   const html =
     '<div class="foco-popup">'+
-      '<div class="cab" style="background:'+colFranja+'">'+
+      '<div class="cab'+(claro?' claro':'')+'" style="background:'+colFranja+'">'+
         '<div class="n">'+mun+'</div>'+
         '<div class="p">'+mv.pob.toLocaleString('es-ES')+' hab · '+mv.sup_km2.toFixed(1)+' km² · '+tiempoTxt+'</div>'+
       '</div>'+
