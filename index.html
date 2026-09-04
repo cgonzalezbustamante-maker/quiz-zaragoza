@@ -217,8 +217,8 @@
   .zona-cartel .dt{margin-top:8px;background:var(--rojo);color:#fff;font-weight:900;font-size:22px;
     border:3px solid #111;border-radius:7px;padding:4px 12px;display:inline-block;letter-spacing:.03em;
     text-transform:uppercase;box-shadow:0 0 0 3.5px #ffdd00}
-  .zona-cartel .tot{margin-top:8px;font-size:15px;color:#111;font-weight:800}
-  .zona-cartel .tot b{color:var(--rojo);font-size:17px}
+  .zona-cartel .tot{margin-top:8px;font-size:18px;color:#111;font-weight:800}
+  .zona-cartel .tot b{color:var(--rojo);font-size:21px}
 </style>
 </head>
 <body>
@@ -1119,7 +1119,7 @@ function focoMunZona(mun){
   const html='<div class="zona-cartel" style="transform:translate(-50%,-125%)"><div class="in">'+
     '<div class="n">'+mun+'</div>'+
     '<div class="pob">'+mv.pob.toLocaleString('es-ES')+' hab · ahora lo cubre '+_zonaParque+'</div>'+
-    '<div class="dt">▲ '+dtTxt+' de llegada</div>'+
+    '<div class="dt">▲ '+dtTxt+'</div>'+
     '<div class="tot">Tiempo total de llegada: <b>'+totTxt+'</b></div>'+
     '</div></div>';
   L.marker(centro,{icon:L.divIcon({className:'', html:html, iconSize:null, iconAnchor:[0,0]}),
