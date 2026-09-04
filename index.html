@@ -6,6 +6,8 @@
 <title>SOSDPZ · Cobertura Operativa Provincia de Zaragoza</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<!-- Unión real de polígonos (para el perímetro exterior de la zona ampliada) -->
+<script src="https://cdn.jsdelivr.net/npm/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
 <style>
   :root{
     --bg:#f4f1ea; --pane:#ffffff; --tinta:#1a1a1a; --oro:#c9a24b; --rojo:#b31f26;
@@ -185,6 +187,36 @@
   .foco-perim-rayas{stroke:#ffdd00;stroke-width:5;stroke-dasharray:14 10;fill:none;opacity:1;animation:march 1s linear infinite}
   .foco-perim-interior{stroke:#ffdd00;stroke-width:1.5;fill:#ffdd00;fill-opacity:.18}
   @keyframes march{to{stroke-dashoffset:-24}}
+  /* ── Zona de cobertura AMPLIADA (modo isócronas) ─────────────────
+     Perímetro de la zona añadida como cinta hazard BLANCA/NEGRA móvil:
+     base negra continua + rayas blancas discontinuas animadas encima
+     (los huecos dejan ver el negro → blanco/negro alternos). */
+  .zona-perim-halo{stroke:#111;stroke-width:10;fill:none;opacity:.95;stroke-linejoin:round;stroke-linecap:round}
+  .zona-perim-rayas{stroke:#ffdd00;stroke-width:6;stroke-dasharray:14 10;fill:none;opacity:1;stroke-linejoin:round;stroke-linecap:butt;animation:march 1s linear infinite}
+  .zona-fill{stroke:none;fill:#000;fill-opacity:.10}
+  .zona-mun-hl{stroke:#000;stroke-width:3;fill:#fff;fill-opacity:.32}
+  .lbl-parque.clk{pointer-events:auto;cursor:pointer}
+  .lbl-parque.zona-activo{outline:3px solid var(--rojo);box-shadow:0 0 0 3px #fff,0 0 14px var(--rojo)}
+  /* Panel flotante de la zona (estilo hazard, como parque cerrado) */
+  #zona-panel{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1200;
+    background:repeating-linear-gradient(45deg,#ffdd00 0 14px,#111 14px 28px);
+    padding:3px;border-radius:11px;box-shadow:0 5px 16px #0008;cursor:move;max-width:92%;user-select:none}
+  #zona-panel .in{background:#fff;border-radius:9px;padding:8px 13px;text-align:center}
+  #zona-panel .tit{font-weight:900;color:var(--rojo);font-size:14px;margin-bottom:3px}
+  #zona-panel .met{font-size:12.5px;color:#111;font-weight:700;line-height:1.55}
+  #zona-panel .met b{color:#000;font-size:14px}
+  #zona-panel .motivo{font-size:12px;color:var(--rojo);font-weight:800;margin-top:5px;
+    border-top:1px dashed #ccc;padding-top:5px}
+  #zona-panel .hint{font-size:10.5px;color:#777;margin-top:4px;font-weight:600}
+  /* Cartel hazard del municipio absorbido */
+  .zona-cartel{background:repeating-linear-gradient(45deg,#ffdd00 0 12px,#111 12px 24px);
+    padding:4px;border-radius:10px;box-shadow:0 5px 16px #0009;cursor:move;user-select:none}
+  .zona-cartel .in{background:#fff;border-radius:6px;padding:7px 11px;text-align:center;border:2px solid #111}
+  .zona-cartel .n{font-weight:900;color:#111;font-size:14px}
+  .zona-cartel .pob{font-size:11px;color:#333;font-weight:700;margin-top:1px}
+  .zona-cartel .dt{margin-top:6px;background:var(--rojo);color:#fff;font-weight:900;font-size:19px;
+    border:2.5px solid #111;border-radius:6px;padding:3px 10px;display:inline-block;letter-spacing:.03em;
+    text-transform:uppercase;box-shadow:0 0 0 3px #ffdd00}
 </style>
 </head>
 <body>
@@ -343,6 +375,7 @@ function setModo(m){
   modo = m;
   document.getElementById('tab-tiempos').classList.toggle('on', m==='tiempos');
   document.getElementById('tab-isocronas').classList.toggle('on', m==='isocronas');
+  if(m!=='isocronas' && _zonaParque) desactivarZona(false);
   renderLeyendaMapa();
   refrescar();
 }
@@ -396,7 +429,7 @@ function renderMuns(){
         (asig ? asig.parque+' · '+asig.min.toFixed(1)+' min' : '<span style="color:#c0392b">SIN COBERTURA</span>')+
         '<br>Pob: '+mv.pob.toLocaleString('es-ES')+' hab · '+mv.sup_km2.toFixed(1)+' km²',
         {sticky:true}
-      ).on('click', ()=>focoMun(mun)).addTo(capaMuns);
+      ).on('click', ()=>{ if(_zonaParque && _zonaAdded.has(mun)) focoMunZona(mun); else focoMun(mun); }).addTo(capaMuns);
     });
   });
 }
@@ -422,8 +455,9 @@ function renderParques(){
       color:cerrado?'#ffdd00':'#1a1a1a',
       fillColor:cerrado?'#000':col,
       fillOpacity:1,
-      weight:cerrado?4:2.5
-    }).addTo(capaParques);
+      weight:cerrado?4:2.5,
+      interactive: modo==='isocronas'
+    }).on('click', ()=>toggleZonaParque(p)).addTo(capaParques);
     // Etiqueta flotante semitransparente: si cerrado, sólo nombre + sello CERRADO
     // (no se muestran muns/km²/hab porque no atiende cobertura).
     let cuerpo;
@@ -452,14 +486,15 @@ function renderParques(){
       'Tauste':                       [0, 39],    // mitad-izq coincide → etiq a la dcha
     };
     const anchor = ANCHORS[p] || [0, -14];
+    const clk = (modo==='isocronas');
     L.marker([pv.lat, pv.lon],{icon:L.divIcon({className:'',
-      html:'<div class="lbl-parque'+(cerrado?' cerrado':'')+'">'+cuerpo+'</div>',
-      iconSize:null, iconAnchor:anchor}), interactive:false, zIndexOffset:1000
-    }).addTo(capaLbls);
+      html:'<div class="lbl-parque'+(cerrado?' cerrado':'')+(clk?' clk':'')+(_zonaParque===p?' zona-activo':'')+'">'+cuerpo+'</div>',
+      iconSize:null, iconAnchor:anchor}), interactive:clk, zIndexOffset:1000
+    }).on('click', ()=>toggleZonaParque(p)).addTo(capaLbls);
   });
 }
 
-function refrescar(){ renderMuns(); renderParques(); renderPanel(); renderPeorCubiertos(); if(modo==='isocronas') renderLeyendaMapa(); }
+function refrescar(){ renderMuns(); renderParques(); renderPanel(); renderPeorCubiertos(); if(modo==='isocronas') renderLeyendaMapa(); if(_zonaParque) sincronizarZona(); }
 
 // Panel "Municipios peor cubiertos" — TOP 10 por franja de tiempo, ordenados
 // por población descendente dentro de cada franja. Sirve para identificar
@@ -834,6 +869,258 @@ function _endDragFoco(){
 document.addEventListener('mouseup', _endDragFoco);
 document.addEventListener('touchend', _endDragFoco);
 document.addEventListener('touchcancel', _endDragFoco);
+
+// ─── Zona de cobertura ampliada (modo isócronas) ──────────────
+// Al pulsar la etiqueta/círculo de un parque ABIERTO, se resalta la zona que ese
+// parque ha ABSORBIDO por el cierre de otros (municipios cuyo parque más rápido
+// —con todo abierto— está cerrado y ahora cubre este). Se dibuja el perímetro de
+// esa zona añadida como cinta hazard blanca/negra móvil, se hace zoom a toda la
+// cobertura actual del parque y se muestra un panel con los datos AÑADIDOS.
+let _zonaParque=null, _zonaAdded=new Set(), _zonaPrevView=null, _zonaMunSel=null;
+const capaZona    = L.layerGroup().addTo(map);   // perímetro + relleno de la zona
+const capaZonaMun = L.layerGroup().addTo(map);   // resalte + cartel del mun absorbido
+
+// Parque más rápido de un mun con TODO abierto (situación base, sin cierres).
+function baselineParque(mun){
+  const m=DATOS.muns[mun];
+  return (m && m.parques && m.parques.length) ? m.parques[0][0] : null;
+}
+// Municipios que P cubre AHORA pero que en la situación base cubriría otro parque
+// (los ha absorbido por cierres).
+function calcAdded(P){
+  const s=new Set();
+  Object.keys(DATOS.muns).forEach(mun=>{
+    const asig=parqueAsignado(mun);
+    if(asig && asig.parque===P && baselineParque(mun)!==P) s.add(mun);
+  });
+  return s;
+}
+function toggleZonaParque(P){
+  if(modo!=='isocronas') return;
+  if(_zonaParque===P){ desactivarZona(true); return; }   // mismo parque → desactivar
+  if((bomberos[P]||0)<=0) return;                          // parque cerrado: no cubre nada
+  activarZona(P);
+}
+function activarZona(P){
+  if(!_zonaParque) _zonaPrevView={center:map.getCenter(), zoom:map.getZoom()};
+  _zonaParque=P; _zonaAdded=calcAdded(P); _zonaMunSel=null;
+  capaZonaMun.clearLayers();
+  dibujarZona();
+  renderPanelZona();
+  marcarParqueActivo();
+  // Zoom a TODA la cobertura actual del parque (zona normal + añadida)
+  const b=L.latLngBounds();
+  Object.keys(DATOS.muns).forEach(mun=>{
+    const asig=parqueAsignado(mun);
+    if(asig && asig.parque===P) (DATOS.muns[mun].poligonos||[]).forEach(poly=>poly.forEach(pt=>b.extend(pt)));
+  });
+  if(b.isValid()) map.fitBounds(b.pad(0.12), {animate:true});
+}
+function desactivarZona(restore){
+  const prev=_zonaPrevView;
+  _zonaParque=null; _zonaAdded=new Set(); _zonaMunSel=null; _zonaPrevView=null;
+  capaZona.clearLayers(); capaZonaMun.clearLayers();
+  const p=document.getElementById('zona-panel'); if(p) p.remove();
+  marcarParqueActivo();
+  if(restore && prev) map.setView(prev.center, prev.zoom, {animate:true});
+}
+// Redibuja perímetro + relleno de la zona añadida SIN mover la vista.
+function sincronizarZona(){
+  if(!_zonaParque) return;
+  if((bomberos[_zonaParque]||0)<=0){ desactivarZona(false); return; }
+  _zonaAdded=calcAdded(_zonaParque);
+  dibujarZona(); renderPanelZona(); marcarParqueActivo();
+  if(_zonaMunSel){ if(_zonaAdded.has(_zonaMunSel)) focoMunZona(_zonaMunSel);
+                   else { _zonaMunSel=null; capaZonaMun.clearLayers(); } }
+}
+function dibujarZona(){
+  capaZona.clearLayers();
+  const polys=[];
+  _zonaAdded.forEach(mun=>{
+    (DATOS.muns[mun].poligonos||[]).forEach(poly=>{
+      if(poly && poly.length>=3){
+        polys.push(poly);
+        L.polygon(poly,{className:'zona-fill', interactive:false}).addTo(capaZona);
+      }
+    });
+  });
+  // Perímetro EXTERIOR de la zona: unión REAL de los polígonos (polygon-clipping)
+  // para que NO aparezca ningún borde interno entre municipios. Cada anillo
+  // resultante (contorno exterior y huecos) se dibuja como un único trazo continuo.
+  // Respaldo: encadenado de aristas si la librería no está disponible.
+  let rings = zonaUnionRings();
+  if(!rings) rings = unionRings(polys);
+  rings.forEach(ring=>{
+    L.polyline(ring,{className:'zona-perim-halo',  interactive:false}).addTo(capaZona);
+    L.polyline(ring,{className:'zona-perim-rayas', interactive:false}).addTo(capaZona);
+  });
+}
+// Unión real de los polígonos de los municipios añadidos. Devuelve anillos en
+// [lat,lon] (contornos + huecos), o null si no hay librería / falla → respaldo.
+function zonaUnionRings(){
+  if(!window.polygonClipping) return null;
+  // Limpia un polígono: a [lon,lat], sin puntos duplicados consecutivos, cerrado.
+  const clean=p=>{
+    const r=[];
+    p.forEach(q=>{ const a=[q[1],q[0]]; const pr=r[r.length-1];
+      if(!pr||pr[0]!==a[0]||pr[1]!==a[1]) r.push(a); });
+    const f=r[0], l=r[r.length-1];
+    if(f&&l&&(f[0]!==l[0]||f[1]!==l[1])) r.push([f[0],f[1]]);
+    return r;
+  };
+  const geoms=[];
+  _zonaAdded.forEach(mun=>(DATOS.muns[mun].poligonos||[]).forEach(poly=>{
+    if(poly && poly.length>=3){ const r=clean(poly); if(r.length>=4) geoms.push([[r]]); }
+  }));
+  if(!geoms.length) return [];
+  // Unión INCREMENTAL (saltando cualquier polígono que dé error → robusto).
+  let acc=null;
+  for(const g of geoms){
+    try{ acc = acc===null ? polygonClipping.union(g) : polygonClipping.union(acc, g); }
+    catch(e){ /* omitir polígono problemático */ }
+  }
+  if(!acc) return null;
+  // Área aproximada (km²) de un anillo en [lon,lat] para filtrar micro-huecos.
+  const areaKm2=r=>{ let a=0; for(let i=0;i<r.length-1;i++){ a+=r[i][0]*r[i+1][1]-r[i+1][0]*r[i][1]; }
+    const latm=r.reduce((s,p)=>s+p[1],0)/r.length;
+    return Math.abs(a)/2*110.574*111.320*Math.cos(latm*Math.PI/180); };
+  const MIN_HUECO_KM2 = 0.3;   // descartar slivers entre municipios; conservar enclaves reales
+  const rings=[];
+  acc.forEach(poly=>{
+    rings.push(poly[0].map(pt=>[pt[1],pt[0]]));                 // contorno exterior
+    for(let i=1;i<poly.length;i++){                             // huecos: solo enclaves reales
+      if(areaKm2(poly[i])>=MIN_HUECO_KM2) rings.push(poly[i].map(pt=>[pt[1],pt[0]]));
+    }
+  });
+  return rings;
+}
+function unionRings(polys){
+  const R=c=>Math.round(c[0]*1e5)/1e5+','+Math.round(c[1]*1e5)/1e5;
+  const cnt=new Map(), seg=new Map();
+  polys.forEach(poly=>{
+    const n=poly.length;
+    for(let i=0;i<n;i++){
+      const a=poly[i], b=poly[(i+1)%n];
+      const ka=R(a), kb=R(b);
+      if(ka===kb) continue;
+      const k = ka<kb ? ka+'|'+kb : kb+'|'+ka;
+      cnt.set(k,(cnt.get(k)||0)+1);
+      if(!seg.has(k)) seg.set(k,[a,b,ka,kb]);
+    }
+  });
+  // Solo aristas de borde (aparecen una vez). Construir adyacencia por nodo.
+  const nodePt={}, adj=new Map(), used=new Set(), bkeys=[];
+  cnt.forEach((c,k)=>{ if(c===1) bkeys.push(k); });
+  bkeys.forEach(k=>{
+    const [a,b,ka,kb]=seg.get(k);
+    nodePt[ka]=a; nodePt[kb]=b;
+    if(!adj.has(ka)) adj.set(ka,[]);
+    if(!adj.has(kb)) adj.set(kb,[]);
+    adj.get(ka).push({k, to:kb});
+    adj.get(kb).push({k, to:ka});
+  });
+  // Encadenar: desde cada arista no usada, caminar por nodos consumiendo aristas.
+  const rings=[];
+  bkeys.forEach(startK=>{
+    if(used.has(startK)) return;
+    const [a,b,ka,kb]=seg.get(startK);
+    const ring=[nodePt[ka]];
+    let cur=ka, guard=0;
+    while(guard++ < 200000){
+      const cand=(adj.get(cur)||[]).find(e=>!used.has(e.k));
+      if(!cand) break;
+      used.add(cand.k);
+      ring.push(nodePt[cand.to]);
+      cur=cand.to;
+      if(cur===ka) break;   // anillo cerrado
+    }
+    if(ring.length>=2) rings.push(ring);
+  });
+  return rings;
+}
+// Hace arrastrable un panel HTML dentro de #map-wrap. Si al soltar no hubo
+// desplazamiento (fue un clic), ejecuta onClick (para diferenciar mover de pulsar).
+function hacerArrastrable(el, onClick){
+  let dragging=false, moved=false, sx=0, sy=0, startL=0, startT=0;
+  const down=e=>{
+    const t=e.touches?e.touches[0]:e;
+    dragging=true; moved=false; sx=t.clientX; sy=t.clientY;
+    const wrap=document.getElementById('map-wrap').getBoundingClientRect();
+    const r=el.getBoundingClientRect();
+    startL=r.left-wrap.left; startT=r.top-wrap.top;
+    el.style.left=startL+'px'; el.style.top=startT+'px'; el.style.right='auto'; el.style.transform='none';
+    e.preventDefault(); e.stopPropagation();
+  };
+  const move=e=>{
+    if(!dragging) return;
+    const t=e.touches?e.touches[0]:e;
+    const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)>3||Math.abs(dy)>3) moved=true;
+    el.style.left=(startL+dx)+'px'; el.style.top=(startT+dy)+'px';
+    e.preventDefault();
+  };
+  const up=()=>{ if(!dragging) return; dragging=false; if(!moved && onClick) onClick(); };
+  el.addEventListener('mousedown',down);
+  el.addEventListener('touchstart',down,{passive:false});
+  window.addEventListener('mousemove',move,{passive:false});
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('mouseup',up);
+  window.addEventListener('touchend',up);
+}
+function renderPanelZona(){
+  let el=document.getElementById('zona-panel');
+  if(!el){
+    el=document.createElement('div'); el.id='zona-panel';
+    document.getElementById('map-wrap').appendChild(el);
+    ['wheel','dblclick'].forEach(ev=>el.addEventListener(ev, e=>e.stopPropagation()));
+    hacerArrastrable(el, null);   // solo mover; se desactiva pulsando de nuevo el parque
+  }
+  let nm=0, pob=0, sup=0;
+  _zonaAdded.forEach(mun=>{ const mv=DATOS.muns[mun]; nm++; pob+=mv.pob; sup+=mv.sup_km2; });
+  const dot=bomberos[_zonaParque]||0;
+  const cerrados = Object.keys(DATOS.parques).filter(p=>(bomberos[p]||0)<=0);
+  const cuerpo = nm>0
+    ? '<div class="met">Nuevos municipios: <b>'+nm+'</b> &middot; Extensión añadida: <b>'+sup.toFixed(0)+'</b> km²<br>'+
+      'Población añadida: <b>'+pob.toLocaleString('es-ES')+'</b> hab &middot; Dotación: <b>'+dot+'</b> 🧑‍🚒</div>'+
+      '<div class="motivo">Ampliación provocada por el cierre de: <b>'+(cerrados.join(', ')||'—')+'</b></div>'
+    : '<div class="met">Sin ampliación: ningún parque cerrado deriva cobertura a este parque.</div>';
+  el.innerHTML='<div class="in"><div class="tit">▲ '+_zonaParque+' · cobertura ampliada</div>'+cuerpo+
+    '<div class="hint">Arrástralo para moverlo</div></div>';
+}
+function marcarParqueActivo(){
+  document.querySelectorAll('.lbl-parque.zona-activo').forEach(el=>el.classList.remove('zona-activo'));
+  if(!_zonaParque) return;
+  document.querySelectorAll('.lbl-parque').forEach(el=>{
+    const nom=el.querySelector('.p-nom');
+    if(nom && nom.textContent.trim()===_zonaParque) el.classList.add('zona-activo');
+  });
+}
+// Municipio absorbido: resaltar (opacidad) + cartel hazard con la AMPLIACIÓN de
+// tiempo de llegada (tiempo actual vía este parque − tiempo base con todo abierto).
+function focoMunZona(mun){
+  const mv=DATOS.muns[mun]; if(!mv) return;
+  _zonaMunSel=mun; capaZonaMun.clearLayers();
+  let b=null;
+  (mv.poligonos||[]).forEach(poly=>{
+    if(poly && poly.length>=3){
+      const pg=L.polygon(poly,{className:'zona-mun-hl', interactive:false}).addTo(capaZonaMun);
+      b = b ? (b.extend(pg.getBounds()), b) : pg.getBounds();
+    }
+  });
+  const asig=parqueAsignado(mun);
+  const tCur = asig ? asig.min : null;
+  const tBase = mv.parques[0][1];
+  const dt = (tCur!=null) ? Math.max(0, tCur - tBase) : null;
+  const centro = b ? b.getCenter() : L.latLng(mv.lat, mv.lon);
+  const dtTxt = (dt!=null) ? ('+'+Math.round(dt)+' min') : '—';
+  const html='<div class="zona-cartel" style="transform:translate(-50%,-125%)"><div class="in">'+
+    '<div class="n">'+mun+'</div>'+
+    '<div class="pob">'+mv.pob.toLocaleString('es-ES')+' hab · ahora lo cubre '+_zonaParque+'</div>'+
+    '<div class="dt">▲ '+dtTxt+' de llegada</div>'+
+    '</div></div>';
+  L.marker(centro,{icon:L.divIcon({className:'', html:html, iconSize:null, iconAnchor:[0,0]}),
+    interactive:true, draggable:true, zIndexOffset:2000}).addTo(capaZonaMun);
+}
 
 // ─── Exportar POSTER (deshabilitado) ──────────────────────────
 async function _generarPoster_deshabilitado_(){
