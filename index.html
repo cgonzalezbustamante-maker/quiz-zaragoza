@@ -201,22 +201,24 @@
   #zona-panel{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1200;
     background:repeating-linear-gradient(45deg,#ffdd00 0 14px,#111 14px 28px);
     padding:3px;border-radius:11px;box-shadow:0 5px 16px #0008;cursor:move;max-width:92%;user-select:none}
-  #zona-panel .in{background:#fff;border-radius:9px;padding:8px 13px;text-align:center}
-  #zona-panel .tit{font-weight:900;color:var(--rojo);font-size:14px;margin-bottom:3px}
-  #zona-panel .met{font-size:12.5px;color:#111;font-weight:700;line-height:1.55}
-  #zona-panel .met b{color:#000;font-size:14px}
-  #zona-panel .motivo{font-size:12px;color:var(--rojo);font-weight:800;margin-top:5px;
-    border-top:1px dashed #ccc;padding-top:5px}
-  #zona-panel .hint{font-size:10.5px;color:#777;margin-top:4px;font-weight:600}
+  #zona-panel .in{background:#fff;border-radius:9px;padding:11px 17px;text-align:center}
+  #zona-panel .tit{font-weight:900;color:var(--rojo);font-size:18px;margin-bottom:5px}
+  #zona-panel .met{font-size:15px;color:#111;font-weight:700;line-height:1.6}
+  #zona-panel .met b{color:#000;font-size:16.5px}
+  #zona-panel .motivo{font-size:14.5px;color:var(--rojo);font-weight:800;margin-top:6px;
+    border-top:1px dashed #ccc;padding-top:6px}
+  #zona-panel .hint{font-size:12px;color:#777;margin-top:5px;font-weight:600}
   /* Cartel hazard del municipio absorbido */
-  .zona-cartel{background:repeating-linear-gradient(45deg,#ffdd00 0 12px,#111 12px 24px);
-    padding:4px;border-radius:10px;box-shadow:0 5px 16px #0009;cursor:move;user-select:none}
-  .zona-cartel .in{background:#fff;border-radius:6px;padding:7px 11px;text-align:center;border:2px solid #111}
-  .zona-cartel .n{font-weight:900;color:#111;font-size:14px}
-  .zona-cartel .pob{font-size:11px;color:#333;font-weight:700;margin-top:1px}
-  .zona-cartel .dt{margin-top:6px;background:var(--rojo);color:#fff;font-weight:900;font-size:19px;
-    border:2.5px solid #111;border-radius:6px;padding:3px 10px;display:inline-block;letter-spacing:.03em;
-    text-transform:uppercase;box-shadow:0 0 0 3px #ffdd00}
+  .zona-cartel{background:repeating-linear-gradient(45deg,#ffdd00 0 15px,#111 15px 30px);
+    padding:6px;border-radius:12px;box-shadow:0 7px 20px #000a;cursor:move;user-select:none}
+  .zona-cartel .in{background:#fff;border-radius:7px;padding:10px 14px;text-align:center;border:3px solid #111}
+  .zona-cartel .n{font-weight:900;color:#111;font-size:17px}
+  .zona-cartel .pob{font-size:13px;color:#333;font-weight:700;margin-top:2px}
+  .zona-cartel .dt{margin-top:8px;background:var(--rojo);color:#fff;font-weight:900;font-size:22px;
+    border:3px solid #111;border-radius:7px;padding:4px 12px;display:inline-block;letter-spacing:.03em;
+    text-transform:uppercase;box-shadow:0 0 0 3.5px #ffdd00}
+  .zona-cartel .tot{margin-top:8px;font-size:15px;color:#111;font-weight:800}
+  .zona-cartel .tot b{color:var(--rojo);font-size:17px}
 </style>
 </head>
 <body>
@@ -1113,10 +1115,12 @@ function focoMunZona(mun){
   const dt = (tCur!=null) ? Math.max(0, tCur - tBase) : null;
   const centro = b ? b.getCenter() : L.latLng(mv.lat, mv.lon);
   const dtTxt = (dt!=null) ? ('+'+Math.round(dt)+' min') : '—';
+  const totTxt = (tCur!=null) ? (Math.round(tCur)+' min') : '—';
   const html='<div class="zona-cartel" style="transform:translate(-50%,-125%)"><div class="in">'+
     '<div class="n">'+mun+'</div>'+
     '<div class="pob">'+mv.pob.toLocaleString('es-ES')+' hab · ahora lo cubre '+_zonaParque+'</div>'+
     '<div class="dt">▲ '+dtTxt+' de llegada</div>'+
+    '<div class="tot">Tiempo total de llegada: <b>'+totTxt+'</b></div>'+
     '</div></div>';
   L.marker(centro,{icon:L.divIcon({className:'', html:html, iconSize:null, iconAnchor:[0,0]}),
     interactive:true, draggable:true, zIndexOffset:2000}).addTo(capaZonaMun);
